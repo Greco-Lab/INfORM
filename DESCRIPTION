@@ -1,0 +1,43 @@
+Package: inform
+Type: Package
+Title: Inform (Inference of Network Response Module)
+Version: 1.0
+Depends:
+    base,
+    stats,
+    utils
+Suggests:
+    V8,
+    RSQLite
+Imports:
+    org.Hs.eg.db,
+    org.Mm.eg.db,
+    GO.db,
+    AnnotationDbi,
+    GSEABase,
+    TopKLists,
+    doParallel,
+    foreach,
+    igraph,
+    minet,
+    parallel,
+    plyr,
+    shiny,
+    shinyjs,
+    shinyBS,
+    shinydashboard,
+    colourpicker,
+    DT,
+    R.utils,
+    GOSemSim,
+    treemap,
+    visNetwork,
+    abind
+Date: 2017-04-27
+Author: Veer Singh Marwah [aut, cre]
+Maintainer: Veer Singh Marwah <veersingh.marwah@gmail.com>
+Description: Network based expression analysis tool for omics data set. It
+    provides user with the ranked candidate genes, responsive sub-networks and enriched
+    GO annotation.
+License: GPL-3
+RoxygenNote: 5.0.1

@@ -7,7 +7,11 @@ library(R.utils)
 library(ggplot2)
 library(GSEABase)
 library(visNetwork)
-source("~/git/INfORM/INfORM_functions.R")
+#source("~/git/INfORM/INfORM_functions.R")
+print("Print Source Directory")
+print(dirname(getSrcDirectory(function(x){x})))
+functions_R <- file.path(dirname(getSrcDirectory(function(x){x})), "INfORM_functions.R")
+source(functions_R)
 
 options(shiny.maxRequestSize=500*1024^2)
 
@@ -268,7 +272,7 @@ shinyServer(
 			sim_cutoff=0.4
 
 			updateProgress(detail="Clustering GO Terms", value=1/3)
-                        GO_clust_summ_list <- go_summarization(localEnrichmentDF)
+                        GO_clust_summ_list <- go_summarization(localEnrichmentDF, annDB=rOrgDB)
                         myValues$GO_clust_summ_list <- GO_clust_summ_list
 			updateProgress(detail="Finishing: ", value=3/3)
 

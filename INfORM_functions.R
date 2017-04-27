@@ -736,11 +736,11 @@ progressive_enrichment <- function(genelists, l1, l2, l3)
 #' @return List of data frames containing clustered GO information, with major terms and individual terms. One data frame for each GO type BP, CC and MF.
 #' @examples
 #' \dontrun{
-#' go_summarization(enriched_GO_DF)
+#' go_summarization(enriched_GO_DF, annDB="org.Hs.eg.db", simMeasure="Rel", treeHeight=9)
 #' }
 #' @keywords internal
 #' @export
-go_summarization <- function(enriched_GO_DF){
+go_summarization <- function(enriched_GO_DF, annDB="org.Hs.eg.db", simMeasure="Rel", treeHeight=9){
 	GODB_vals = select(GO.db, keys(GO.db, "GOID"), c("TERM", "ONTOLOGY"))
 	GODB_vals_ll <- list()
 	GODB_vals_ll[["BP"]] <- GODB_vals[GODB_vals$ONTOLOGY=="BP",c("GOID", "TERM")]
@@ -753,7 +753,9 @@ go_summarization <- function(enriched_GO_DF){
 		ont <- enriched_GO_DF[enriched_GO_DF$ONTOLOGY == typ,]
 		ont_ids <- as.character(ont[which(ont$GOID %in% GODB_vals_ll[[typ]]$GOID), "GOID"])
 
-		simsem_matrix <- GOSemSim::mgoSim(ont_ids, ont_ids,  measure="Rel", ont=typ, organism="human", combine=NULL)
+		#simsem_matrix <- GOSemSim::mgoSim(ont_ids, ont_ids,  measure="Rel", ont=typ, organism="human", combine=NULL)
+                d <- godata(annDB, ont=typ, computeIC=TRUE)
+		simsem_matrix <- GOSemSim::mgoSim(ont_ids, ont_ids, semData=d, measure="Rel", combine=NULL)
 		dim_len <- dim(simsem_matrix)[1]
 		print(dim_len)
 		simsem_matrix_clean <- simsem_matrix[rowSums(is.na(simsem_matrix))!=dim_len, colSums(is.na(simsem_matrix))!=dim_len]
