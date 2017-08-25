@@ -25,3 +25,5 @@ A novel computational method and its R and web-based implementations, to perform
   setwd("~/INfORM_clone")
   runApp("INfORM-app/")
 ```
+#### Dependencies and License
+Please refer to the 'DESCRIPTION' and 'NAMESPACE' files for information about the license and dependencies required to run INfORM.
