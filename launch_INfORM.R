@@ -7,7 +7,6 @@ library(shiny)
 #' @import shinydashboard
 #' @import DT
 #' @import R.utils
-#' @import png
 #' @importFrom shinyjs enable disable toggle info onclick
 #' @importFrom shiny runApp
 #' @export

@@ -1,15 +1,45 @@
-library(shiny)
-library(shinyjs)
-library(colourpicker)
-library(shinyBS)
-library(shinydashboard)
-library(DT)
-library(visNetwork)
+suppressMessages(library(shiny))
+suppressMessages(library(shinyjs))
+suppressMessages(library(colourpicker))
+suppressMessages(library(shinyBS))
+suppressMessages(library(shinydashboard))
+suppressMessages(library(DT))
+suppressMessages(library(visNetwork))
+suppressMessages(library(radarchart))
 
 jsCode <- 'shinyjs.plot_bg_col = function(col){
         var el = $("." + "vPlot");
         el.css("background-color", col);
 }'
+
+appCSS <- "
+	.nav-tabs-custom .nav-tabs { border-top-left-radius: 3px; border-top-right-radius: 3px; }
+	.nav-tabs-custom .nav-tabs li.active { border-left: 1px #3c8dbc solid; border-right: 1px #3c8dbc solid; }
+	.nav-tabs-custom .nav-tabs li a { 
+		border-left: 1px #3c8dbc solid; 
+		border-right: 1px #3c8dbc solid; 
+		border-top: 1px #3c8dbc solid; 
+		border-radius: 4px 4px 0 0;
+	}
+	.nav-tabs-custom .nav-tabs li { margin-right: 3px } 
+	.nav-tabs-custom .tab-content { border: 1px #3c8dbc solid; }
+
+	//For plot height
+	//.shiny-plot-output { height:100vh !important; }
+
+	//For plot loading
+	//.plot-container { position: relative; }
+	//#loading-spinner {
+	//	position: absolute;
+	//	left: 50%;
+	//	top: 50%;
+	//	z-index: -1;
+	//	margin-top: -33px;  /* half of the spinner's height */
+	//	margin-left: -33px; /* half of the spinner's width */
+	//}
+	//#hcPlot.recalculating { z-index: -2; }
+	//#.shiny-plot-output .recalculating { z-index: -2; }
+"
 
 dashboardPage(
 	dashboardHeader(title="INfORM - Inference of NetwOrk Response Module", titleWidth="25%"),
@@ -23,99 +53,144 @@ dashboardPage(
 		'))),
 		useShinyjs(),
 		extendShinyjs(text = jsCode),
+		inlineCSS(appCSS),
+		shinyBS::bsModal("importDgxModal", "Import Differential Gene Expression Table", "import_dgx_submit", size="large",
+			fluidRow(
+				column(3,
+					fileInput("dgx", label="File")
+				),column(3,
+					uiOutput("selSep")
+				),column(3,
+					textInput("sepT", "Other Seperator", value=":")
+				),column(3,
+					uiOutput("selQuote")
+				)
+			),fluidRow(
+				column(1,
+					actionButton("load_dgx_submit", "Load")
+				)
+			),hr(),
+			fluidRow(
+				column(4,
+					uiOutput("selPvCol")
+				),column(4,
+					uiOutput("selLfcCol")
+				)
+			),fluidRow(
+				column(12, align="right",
+					shinyBS::bsButton("upload_dgx_submit", label="Import", style="info", icon=icon("hand-o-right"))
+				)
+			),hr(),
+			fluidRow(
+				column(12,
+					DT::dataTableOutput("dgxDT")
+				)
+			)
+		),
 		fluidRow(
 			box(
-				title="Upload", status = "primary", solidHeader = TRUE, collapsible = TRUE, collapsed = TRUE, width=12,
+				title="Upload", status = "primary", solidHeader = TRUE, collapsible = TRUE, collapsed = FALSE, width=12,
 				fluidRow(
+			#		column(12,
+			#		    h4("Upload Gene Expression Data")
+			#		)
+			#	),fluidRow(
 					column(12,
-					    h4("Upload Gene Expression Data")
+						h4("Upload Gene Expression Data"),
+						wellPanel(
+							fluidRow(
+								column(4,
+									fileInput(inputId="gx", label="Gene Expression Table")
+								),column(4,
+									#fileInput(inputId="dgx", label="Differential Gene Expression Table"),
+								#),column(2,
+									#shinyBS::bsButton("import_dgx_submit", label="Import Differential Gene Expression Table", style="danger", icon=icon("exclamation-circle")),
+									div(id="outerDgxDiv", class="form-group shiny-input-container",
+										tags$label("Differential Gene Expression Table"),
+										div(id="innerDgxDiv", class="input-group",
+											div(id="dgxBtnDiv", class="input-group-btn",
+												shinyBS::bsButton("import_dgx_submit", label="Upload", style="danger", icon=icon("exclamation-circle"))
+											),
+											tags$input(id="dgxUploadDisp", class="form-control", placeholder="No file uploaded", readonly="readonly", type="text")
+										)
+									),
+									shinyBS::bsTooltip("import_dgx_submit", "Launch a graphical window, to configure import of differenatial expression data from a file!", placement="bottom")
+								),column(4,
+									fileInput(inputId="mat", label="Adjacency Matrix (Pre-Inferred with INfORM) [OPTIONAL]")
+								)
+							)
+						)
 					)
-				),
-				fluidRow(
-					column(4,
-						fileInput(inputId="gx", label="Gene Expression Table")
-					),
-					column(4,
-						fileInput(inputId="dgx", label="Differential Gene Expression Table")
-					),
-					column(4,
-						fileInput(inputId="mat", label="Adjacency Matrix (Pre-Inferred with INfORM) [OPTIONAL]")
-					)
-				),
-				fluidRow(
+				),fluidRow(
 					column(6,
 						#checkboxInput("checkUnconnected", "Remove Unconnected Genes", value=FALSE),
 						uiOutput("selOrganism"),
 						hr(),
 						actionButton("runINfORM", "Run INfORM"),
 						bsTooltip("runINfORM", "Run INfORM with provided Gene Expression Table and Differential Expression Table!", placement="right")
-					),
-					column(6,
+					),column(6,
 						uiOutput("selCores")
 					)
-				),
-				fluidRow(
+				),fluidRow(
 					column(12,
 						a(id = "showAdvancedOptions", "Show/Hide Advanced Options"),
 						hidden(div(id="advancedOptions",
-						    wellPanel(
-							fluidRow(
-								column(12,
-								    h4("Select Parameters to Run MINET (Mutual Information NETworks)"),
-								    uiOutput("selMethod"),
-								    uiOutput("selEst"),
-								    uiOutput("selDisc")#,
-								    #uiOutput("selCores")
+							h4("Select Parameters to Run MINET (Mutual Information NETworks)"),
+							wellPanel(
+								fluidRow(
+									column(12,
+									    #h4("Select Parameters to Run MINET (Mutual Information NETworks)"),
+									    uiOutput("selMethod"),
+									    uiOutput("selEst"),
+									    uiOutput("selDisc")#,
+									    #uiOutput("selCores")
+									)
 								)
-							)
-						    ),
-						    fluidRow(
-							column(6,
-								h4("Configure Gene Ranking"),
-								wellPanel(
-									uiOutput("rankAttr") 
-								)
-							),
-							column(6,
-								h4("Candidate Selection"),
-								wellPanel(
-									fluidRow(
-										column(3, numericInput("candid_val", "Top Candidate Genes", value="5")),
-										column(8, radioButtons("candid_type", NULL, choices=c("Count"="count", "Percent"="precentage"), selected="count", inline=TRUE))
+							),fluidRow(
+								column(6,
+									h4("Configure Gene Ranking"),
+									wellPanel(
+										uiOutput("rankAttr") 
+									)
+								),column(6,
+									h4("Module Detection"),
+									wellPanel(
+										fluidRow(
+											column(4, 
+												selectInput("modMethod", "Method", 
+													choices=c(
+														"Walktrap"="walktrap",
+														"Spinglass"="spinglass",
+														"Louvain"="louvain",
+														"Greedy"="greedy"
+													), 
+													multiple=FALSE, 
+													selected="walktrap"
+												)
+											),column(4,
+												numericInput("minModSize", "Minimum Module Size",
+													value=10,
+													min=1,
+													max=NA,
+													step=1
+												)
+											),column(4,
+                                                                                                div(id="outerDgxDiv", class="form-group shiny-input-container",
+                                                                                                        tags$label(" "),
+                                                                                                        div(id="innerDgxDiv", class="input-group",
+                                                                                                                shinyBS::bsButton("runDetect", label="Detect Modules", style="danger", icon=icon("exclamation-circle"))
+                                                                                                        )
+                                                                                                )
+											)
+										)
 									)
 								)
 							)
-						    ),
-						    fluidRow(
-							column(12,
-							    h4("Sub-Graph Selection by Ranked Genes"),
-							    wellPanel(
-								fluidRow(
-								    column(4, align="center", h4("Small Set"),
-									    fluidRow(
-										    numericInput("l1_val", NULL, value="5", width="20%")
-									    )
-								    ),
-								    column(4, align="center", h4("Medium Set"),
-									    fluidRow(
-										    numericInput("l2_val", NULL, value="10", width="20%")
-									    )
-								    ),
-								    column(4, align="center", h4("Large Set"),
-									    fluidRow(
-										    numericInput("l3_val", NULL, value="20", width="20%")
-									    )
-								    )
-								)
-							    )
-							)
-						    )
 						))
 					)
 				)
 			)
-		),
-		fluidRow(
+		),fluidRow(column(12,
 			tabBox(
 				id="display", title="Display Area", width=12,
 				tabPanel(value="corMat_display", title="Adjacency Matrix", 
@@ -123,30 +198,23 @@ dashboardPage(
 						valueBoxOutput('totalGeneBox'),
 						valueBoxOutput('connGeneBox'),
 						valueBoxOutput('unGeneBox')
-					),
-					fluidRow(
+					),fluidRow(
 						column(12,
 							fluidRow(
 								column(4,
 									downloadButton('downloadMat', label='Download Adjacency Matrix'),
 									hr()
 								)
-							),
-							fluidRow(
+							),fluidRow(
 								column(4,
 									downloadButton('downloadUnGenes', label='Download Un-Connected Genes List')
-								)#,
-								#column(4,
-								#	downloadButton('downloadMat', label='Download Adjacency Matrix')
-								#)
-							),
-							fluidRow(
+								)
+							),fluidRow(
 								tableOutput('unGeneList')
 							)
 						)
 					)
-				),
-				tabPanel(value="net_display", title="Network",
+				),tabPanel(value="net_display", title="Network",
 					fluidRow(column(12,
 					a(id = "showColorOptionsMain", "Show/Hide Aesthetics Options"),
 					hidden(div(id="colorOptionsMain",
@@ -161,8 +229,7 @@ dashboardPage(
 											column(4,colourpicker::colourInput("vColP", "Node Color +ve", value="salmon")),
 											column(4,colourpicker::colourInput("vColN", "Node Color -ve", value="lightblue")),
 											column(4,colourpicker::colourInput("vColD", "Node Color Default", value="lightgrey"))
-										),
-										fluidRow(
+										),fluidRow(
 											column(4,colourpicker::colourInput("vhColP", "Node Highlight Color +ve", value="red")),
 											column(4,colourpicker::colourInput("vhColN", "Node Highlight Color -ve", value="royalblue")),
 											column(4,colourpicker::colourInput("vhColD", "Node Highlight Color Default", value="grey"))
@@ -216,8 +283,7 @@ dashboardPage(
 									fluidRow(
 										column(6,colourpicker::colourInput("eColP", "Edge Color +ve", value="salmon")),
 										column(6,colourpicker::colourInput("eColN", "Edge Color -ve", value="lightblue"))
-									),
-									fluidRow(
+									),fluidRow(
 										column(6,colourpicker::colourInput("ehColP", "Edge Highlight Color +ve", value="red")),
 										column(6,colourpicker::colourInput("ehColN", "Edge Highlight Color -ve", value="royalblue"))#,
 									)
@@ -227,16 +293,13 @@ dashboardPage(
 									fluidRow(
 										column(6,selectInput("vShape", "Node Shape", choices=c("circle","ellipse","database","box","text"), multiple=FALSE, selected="circle")),
 										column(6,colourpicker::colourInput("vBrdCol", "Node Border Color", value="black"))
-									),
-									fluidRow(
+									),fluidRow(
 										column(6,numericInput("vSize", "Node Label Size", value="20")),
 										column(6,colourpicker::colourInput("vLblCol", "Node Label Color", value="#343434"))
-									),
-									fluidRow(
+									),fluidRow(
 										column(6,numericInput("eWidth", "Edge Width", value="5", width="100%")),
 										column(6,colourpicker::colourInput("bgCol", "Background Color", value="white"))
-									),
-									fluidRow(
+									),fluidRow(
 										column(6,numericInput("dDepth", "Depth of Highlighting Nearest Nodes", value="2", width="100%"))
 									)
 								)
@@ -246,7 +309,7 @@ dashboardPage(
 					tabBox(
 						id="net_panel", title="", width=12,
 						tabPanel(value="main", title="Main",
-							fluidRow(
+							fluidRow(column(12,
 								box(title="Download Options", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
 									wellPanel(
 										selectInput("graphExportFormat", NULL, choices=c("edgelist", "pajek", "ncol", "lgl", "graphml", "dimacs", "gml", "dot", "leda"), multiple=FALSE, selected="dot"),
@@ -255,114 +318,148 @@ dashboardPage(
 									downloadButton('downloadGraphGenes', label='Download Graph Gene List')
 								),
 								div(id="main_info", class="wrap", actionButton("IGraphVis_info", "Main Graph Info", icon=icon("info-circle")))
-							    ),
-							    fluidRow(
-								    column(12,
-									    wellPanel(
-										    div(id="mainPlot", class="vPlot",
-											    visNetworkOutput('IGraphVis', width = "100%", height = "1000px")
-										    )
-									    )
-								    )
-							    )
-						    ),
-						tabPanel(value="small", title="Small Set",
-							fluidRow(
-								box(title="Download Options", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
-									wellPanel(
-										selectInput("smallSubNetExportFormat", NULL, choices=c("edgelist", "pajek", "ncol", "lgl", "graphml", "dimacs", "gml", "dot", "leda"), multiple=FALSE, selected="dot", width="50%"),
-										downloadButton('downloadSmallSubNet', label='Export Sub-Network')
-									),
-									downloadButton('downloadSmallSubNetGenes', label='Download Sub-Network Gene List')
-								),
-								div(id="small_info", class="wrap", actionButton("smallSubNetVis_info", "Small Set Graph Info", icon=icon("info-circle")))
-							),
-							fluidRow(
+							)),fluidRow(
+								column(1,
+                                                                        checkboxInput(inputId="chkGrpCol", label="Show Modules", value=FALSE)
+								),column(2, align="left",
+									uiOutput("selFocusMod")
+								)
+							),fluidRow(
 								column(12,
 									wellPanel(
-										div(id="sPlot", class="vPlot",
-											visNetworkOutput('smallSubNetVis', width = "99%", height = "800px")
+										div(id="mainPlot", class="vPlot",
+											#visNetworkOutput('IGraphVis', width="100%", height="1000px")
+											visNetworkOutput('IGraphVis', width="90%", height="800px")
 										)
 									)
 								)
 							)
 						),
-						tabPanel(value="medium", title="Medium Set",
-							fluidRow(
+						tabPanel(value="mods", title="Modules",
+							fluidRow(column(12,
 								box(title="Download Options", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
 									wellPanel(
-										selectInput("mediumSubNetExportFormat", NULL, choices=c("edgelist", "pajek", "ncol", "lgl", "graphml", "dimacs", "gml", "dot", "leda"), multiple=FALSE, selected="dot", width="50%"),
-										downloadButton('downloadMediumSubNet', label='Export Sub-Network')
+										selectInput("modExportFormat", NULL, choices=c("edgelist", "pajek", "ncol", "lgl", "graphml", "dimacs", "gml", "dot", "leda"), multiple=FALSE, selected="dot", width="50%"),
+										downloadButton('downloadMod', label='Export Module')
 									),
-									downloadButton('downloadMediumSubNetGenes', label='Download Sub-Network Gene List')
+									downloadButton('downloadModGenes', label='Download Module Gene List')
 								),
-								div(id="medium_info", class="wrap", actionButton("mediumSubNetVis_info", "Medium Set Graph Info", icon=icon("info-circle")))
-							),
-							fluidRow(
-								column(12,
-									wellPanel(
-										div(id="mPlot", class="vPlot",
-											visNetworkOutput('mediumSubNetVis', width = "99%", height = "800px")
-										)
-									)
+								div(id="mod_info", class="wrap", actionButton("modVis_info", "Module Info", icon=icon("info-circle")))
+							)),fluidRow(
+								column(4,
+									uiOutput("selMod")
 								)
-							)
-						),
-						tabPanel(value="large", title="Large Set",
-							fluidRow(
-								box(title="Download Options", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
-									wellPanel(
-										selectInput("largeSubNetExportFormat", NULL, choices=c("edgelist", "pajek", "ncol", "lgl", "graphml", "dimacs", "gml", "dot", "leda"), multiple=FALSE, selected="dot", width="50%"),
-										downloadButton('downloadLargeSubNet', label='Export Sub-Network')
-									),
-									downloadButton('downloadLargeSubNetGenes', label='Download Sub-Network Gene List')
-								),
-								div(id="large_info", class="wrap", actionButton("largeSubNetVis_info", "Large Set Graph Info", icon=icon("info-circle")))
-							),
-							fluidRow(
+							),fluidRow(
 								column(12,
 									wellPanel(
-										div(id="lPlot", class="vPlot",
-											visNetworkOutput('largeSubNetVis', width = "99%", height = "800px")
+										div(id="modPlot", class="vPlot",
+											visNetworkOutput('modVis', width="99%", height="800px")
 										)
 									)
 								)
 							)
 						)
 					)))
-				),
-				tabPanel(value="enrichment_table", title="Annotation Enrichment", 
+				),tabPanel(value="radar_chart", title="Module Comparison Chart", 
+					fluidRow(column(12,
+						div(id="radar_info", class="wrap", actionButton("radarChart_info", "Radar Chart Info", icon=icon("info-circle"))),
+						hr()
+					)),fluidRow(column(12,
+						wellPanel(
+							div(id="rChart", class="rChart",
+								#chartJSRadarOutput('radarChart', width="100%", height="500")
+								chartJSRadarOutput('radarChart', width="20%", height="20%")
+							)
+						)
+					))
+				),tabPanel(value="enrichment_panel", title="Annotation Enrichment", 
+					fluidRow(column(12,
+                                                tabBox(
+                                                        id="ann_tbox", title="", width=12,
+                                                        tabPanel(value="enrichment_table", title="Enrichment Table",
+                                                                fluidRow(column(12,
+                                                                        box(title="Download & Export", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
+										downloadButton('downloadGO', label='Export Enriched GO Tables')
+                                                                        ),
+                                                                        div(id="et_info", class="wrap", actionButton("enrichmentDT_info", "Annotation Enrichment Info", icon=icon("info-circle")))
+                                                                )),fluidRow(column(4,
+                                                                        uiOutput("selModEnrich")
+                                                                )),fluidRow(column(12,
+                                                                        DT::dataTableOutput('enrichmentDT')
+                                                                ))
+                                                        ),tabPanel(value="sim_map", title="Module Similarity by GO Heatmap",
+                                                                fluidRow(column(12,
+									box(title="Download & Export", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
+										downloadButton('downloadSimMat', label='Download Matrix of GO based Module Similarity')
+									),
+									div(id="heatmap_info", class="wrap", actionButton("simHeatmap_info", "Similarity Heatmap Info", icon=icon("info-circle")))
+								)),fluidRow(column(12,
+                                                                        plotOutput('simHeatmap', width="99%", height="800px")
+                                                                ))
+                                                        ) 
+                                                )
+                                        ))
+				),tabPanel(value="rank_table", title="Rank Table", 
 					fluidRow(column(12,
 						box(title="Download & Export", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
-							wellPanel(
-								downloadButton('downloadGO', label='Download Progressively Enriched GO List')
-							)
+							downloadButton('downloadRankDT', label='Export Ranked Gene Tables')
 						),
-						div(id="et_info", class="wrap", actionButton("enrichmentDT_info", "Annotation Enrichment Info", icon=icon("info-circle")))
-					)),
-					fluidRow(column(12,
-						DT::dataTableOutput('enrichmentDT')
+						div(id="rt_info", class="wrap", actionButton("rankDT_info", "Rank Table Info", icon=icon("info-circle")))
+					)),fluidRow(column(12,
+						DT::dataTableOutput('rankDT')
 					))
-				),
-				tabPanel(value="tile_plot", title="GO Enrichment Tile Plot", 
-					fluidRow(column(12,
-					div(id="tile_info", class="wrap", actionButton("tile_plot_panel_info", "Tile Plot Info", icon=icon("info-circle"))),
-					hr(),
-					tabBox(
-						id="tile_plot_panel", title="", width=12,
-						tabPanel(value="BP", title="Biological Process", plotOutput('tilePlotBP', width = "99%", height = "800px")),
-						tabPanel(value="CC", title="Cellular Component", plotOutput('tilePlotCC', width = "99%", height = "800px")),
-						tabPanel(value="MF", title="Molecular Function", plotOutput('tilePlotMF', width = "99%", height = "800px"))
-					)))
-				),
-				tabPanel(value="rank_table", title="Rank Table", 
-					div(id="rt_info", class="wrap", actionButton("rankDT_info", "Rank Table Info", icon=icon("info-circle"))),
-					hr(),
-					downloadButton('downloadRankDT', label='Download Ranked Gene Table'),
-					DT::dataTableOutput('rankDT')
+				),tabPanel(value="res_mod", title="Response Module Optimization", 
+                                        fluidRow(column(3,
+                                                        uiOutput("selOptMod")
+                                                ),column(3,
+                                                        uiOutput("selConMod")
+                                                ),column(3,
+                                                        uiOutput("selIndMod")
+                                                )
+                                        ),fluidRow(column(3,
+                                                        #actionButton("rChartButton", "Plot"),
+							shinyBS::bsButton("rChartButton", label="Plot", style="danger", icon=icon("exclamation-circle")),
+							hr()
+                                                )
+					),fluidRow(column(12,
+                                                tabBox(
+                                                        id="opt_tbox", title="", width=12,
+                                                        tabPanel(value="radar_chart_opt", title="Radar Chart",
+                                                                fluidRow(column(12,
+									box(title="Download & Export", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
+										downloadButton('downloadOptRankDT', label='Export Ranked Gene Tables (Optimized)')
+									),
+									div(id="opt_radar_info", class="wrap", actionButton("optRadarChart_info", "Radar Chart Info", icon=icon("info-circle"))),
+									hr()
+								)),fluidRow(column(12,
+                                                                        wellPanel(
+                                                                                div(id="rChart", class="rChart",
+                                                                                        chartJSRadarOutput('optRadarChart', width="100", height="100")
+                                                                                )
+                                                                        )
+                                                                ))
+                                                        ),tabPanel(value="tile_plot", title="GO Enrichment Tile Plot", 
+                                                                fluidRow(column(12,
+									box(title="Download & Export", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
+										downloadButton('downloadTilePlot', label='Export Tileplots')
+									),
+                                                                        div(id="tile_info", class="wrap", actionButton("tile_plot_panel_info", "Tile Plot Info", icon=icon("info-circle"))),
+                                                                        hr(),
+                                                                        tabBox(
+                                                                               id="tile_plot_panel", title="", width=12,
+                                                                               tabPanel(value="BP", title="Biological Process", plotOutput('tilePlotBP', width = "99%", height = "800px")),
+                                                                               tabPanel(value="CC", title="Cellular Component", plotOutput('tilePlotCC', width = "99%", height = "800px")),
+                                                                               tabPanel(value="MF", title="Molecular Function", plotOutput('tilePlotMF', width = "99%", height = "800px"))
+                                                                        )
+                                                                ))
+                                                        )
+                                                )
+                                        ))
 				)
 			)
-		)
+		)),fluidRow(column(12,
+                        actionButton("rserve_submit", "START SOCKET DAEMON")
+		))
 	)
 )
 

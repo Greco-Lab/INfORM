@@ -1,28 +1,33 @@
 
-#source("INfORM_class.R")
-library(grid)
-library(igraph)
-library(TopKLists)
-library(org.Hs.eg.db)
-library(org.Mm.eg.db)
-library(GO.db)
-library(plyr)
-library(GSEABase)
-library(GOSemSim)
-library(treemap)
-library(abind)
-library(minet)
-library(foreach)
-library(parallel)
-library(doParallel)
-library(ggplot2)
-library(visNetwork)
+suppressMessages(library(grid))
+suppressMessages(library(igraph))
+suppressMessages(library(TopKLists))
+suppressMessages(library(org.Hs.eg.db))
+suppressMessages(library(org.Mm.eg.db))
+suppressMessages(library(GO.db))
+suppressMessages(library(plyr))
+suppressMessages(library(GSEABase))
+suppressMessages(library(GOSemSim))
+suppressMessages(library(treemap))
+suppressMessages(library(abind))
+suppressMessages(library(minet))
+suppressMessages(library(foreach))
+suppressMessages(library(parallel))
+suppressMessages(library(doParallel))
+suppressMessages(library(ggplot2))
+suppressMessages(library(visNetwork))
+suppressMessages(library(radarchart))
+suppressMessages(library(WriteXLS))
+suppressMessages(library(made4))
+suppressMessages(library(gplots))
 
 net_attr <- c("betweenness", "cc", "degree", "eccentricity", "closeness", "eigenvector")
 
 methods <- c("clr","aracne","mrnet","mrnetb") # i
 est.opt <- c("pearson","spearman","kendall","mi.empirical","mi.mm","mi.shrink","mi.sg")# j
 disc.opt <- c("none","equalfreq","equalwidth","globalequalwidth") # k
+shiny_app_vars <- NULL
+shiny_app_env <- NULL
 
 combineList <- function(...){
 	myParam <- list(...)
@@ -56,7 +61,13 @@ utils::globalVariables(names=c("GO.db"))
 #' @return A binary symmetrix matrix representing the median of mutual information correlation computed across various MINET combinations
 #' @examples
 #' \dontrun{
-#' calculate_correlation_matrix(gx_table=gene_expression.df, iMethods=c("clr","aracne","mrnet","mrnetb"), iEst=c("pearson","spearman","kendall","mi.empirical","mi.mm","mi.shrink","mi.sg"), iDisc=c("none","equalfreq","equalwidth","globalequalwidth"), ncores=12, debug_output=TRUE)
+#' calculate_correlation_matrix(gx_table=gene_expression.df,
+#' iMethods=c("clr","aracne","mrnet","mrnetb"),
+#' iEst=c("pearson","spearman","kendall","mi.empirical","mi.mm","mi.shrink","mi.sg"),
+#' iDisc=c("none","equalfreq","equalwidth","globalequalwidth"),
+#' ncores=12,
+#' debug_output=TRUE
+#' )
 #' }
 #' @keywords internal
 #' @export
@@ -175,9 +186,9 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
         return(matGX)
 }
 
-#' Create binary inference matrix by combining information from different inference algorithms with the help of internal function calculate_correlation_matrix().
+#' Create edge ranked inference matrix by combining information from different inference algorithms with the help of internal function calculate_correlation_matrix().
 #'
-#' get_ranked_consensus_binary_matrix uses the internal function calculate_correlation_matrix() to get a single consensus matrix per inference algorithm. User can specify
+#' get_ranked_consensus_matrix uses the internal function calculate_correlation_matrix() to get a single consensus matrix per inference algorithm. User can specify
 #' the inference algorithms, correlation calculation methods and discretization methods, a combination of parameters will be created per inference algorithm to run calculate_correlation_matrix(), 
 #' this will generate a consensus matrix per inference algorithm. The consesus matrices from different inference algorithms are used to create a single binary matrix by rank based selection of edges.
 #'
@@ -190,14 +201,21 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 #' @param ncores Number of cores for running instances of MINET in parallel default:2.
 #' @param debug_output Print help and status messages to help debug the running of the function default:FALSE.
 #' @param updateProgress Shiny application can request for update of progress from this function default:NULL.
-#' @return A binary symmetrix matrix representing the edge rank based consensus from different inference algorithms
+#' @return A symmetrix matrix with median edge ranks representing the edge rank based consensus from different inference algorithms.
 #' @examples
 #' \dontrun{
-#' get_ranked_consensus_binary_matrix(gx_table=gene_expression.df, iMethods=c("clr","aracne","mrnet","mrnetb"), iEst=c("pearson","spearman","kendall","mi.empirical","mi.mm","mi.shrink","mi.sg"), iDisc=c("none","equalfreq","equalwidth","globalequalwidth"), ncores=12, debug_output=TRUE)
+#' get_ranked_consensus_matrix(gx_table=gene_expression.df,
+#' iMethods=c("clr","aracne","mrnet","mrnetb"),
+#' iEst=c("pearson","spearman","kendall","mi.empirical","mi.mm","mi.shrink","mi.sg"),
+#' iDisc=c("none","equalfreq","equalwidth","globalequalwidth"),
+#' ncores=12,
+#' debug_output=TRUE
+#' )
 #' }
 #' @keywords internal
 #' @export
-get_ranked_consensus_binary_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, debug_output=FALSE, updateProgress=NULL){
+#get_ranked_consensus_binary_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, debug_output=FALSE, updateProgress=NULL){
+get_ranked_consensus_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, debug_output=FALSE, updateProgress=NULL){
 	mat_ll <- list()
     	ranked_edges_ll <- list()
 
@@ -232,27 +250,79 @@ get_ranked_consensus_binary_matrix <- function(gx_table, iMethods, iEst, iDisc, 
 	borda_res <- TopKLists::Borda(ranked_edges_ll)
 
 	print("Get a consensus binary matrix by selecting the most significant ranked edges from median rank of Borda result.")
-	bin_mat <- mat_ll[[1]]
-	bin_mat[,] <- 0
+	#bin_mat <- mat_ll[[1]]
+	#bin_mat[,] <- 0
+	rank_mat <- mat_ll[[1]]
+	rank_mat[,] <- 0
 
 	input_genes <- dim(gx_table)[1]
 	genes <- NULL
 	total_genes <- 0
 	median_list <- borda_res$TopK$median
+        cutoffIdx <- NULL
 	for(i in c(1:length(median_list))){
 		if(total_genes<input_genes){
 			local_genes <- strsplit(median_list[i], ";")[[1]]
-			bin_mat[local_genes[1],local_genes[2]] <- 1
-			bin_mat[local_genes[2],local_genes[1]] <- 1
+			#bin_mat[local_genes[1],local_genes[2]] <- 1
+			#bin_mat[local_genes[2],local_genes[1]] <- 1
+			rank_mat[local_genes[1],local_genes[2]] <- i
+		        rank_mat[local_genes[2],local_genes[1]] <- i
 			genes[local_genes[1]] <- 1
 			genes[local_genes[2]] <- 1
 			total_genes <- length(genes)
 		}else{
+                        cutoffIdx <- i-1
 			break
 		}
 	}
-	print("Binary matrix computed, returning!")
-	return(bin_mat)
+        #edge_rank <- median_list[c(1:cutoffIdx)]
+        #res_ll <- list(bin_mat=bin_mat, edge_rank=edge_rank)
+
+	#print("Binary matrix computed, returning!")
+	#return(bin_mat)
+	#return(res_ll)
+	print("Rank matrix computed, returning!")
+	return(rank_mat)
+}
+
+#' Get edge rank list and binary inference matrix from edge rank matrix computed by get_ranked_consensus_matrix().
+#'
+#' parse_edge_rank_matrix parses the edge rank matrix created by using the internal function get_ranked_consensus_matrix_matrix() to get a ranked edge list and a binary matrix.
+#'
+#' @importFrom TopKLists Borda
+#'
+#' @param edge_rank_matrix A symmetrix matrix with edge ranks as weight.
+#' @param debug_output Print help and status messages to help debug the running of the function default:FALSE.
+#' @param updateProgress Shiny application can request for update of progress from this function default:NULL.
+#' @return A list containing a vector of consensus edge ranks and a binary symmetrix matrix representing the edge rank matrix.
+#' @examples
+#' \dontrun{
+#' parse_edge_rank_matrix <- function(edge_rank_matrix, debug_output=FALSE, updateProgress=NULL)
+#' }
+#' @keywords internal
+#' @export
+parse_edge_rank_matrix <- function(edge_rank_matrix, debug_output=FALSE, updateProgress=NULL){
+        bin_mat <- edge_rank_matrix
+        idx <- which(bin_mat>0)
+        if(length(idx)>0){
+                print("Creating binary matrix...")
+                bin_mat[which(bin_mat>0)] <- 1
+        }
+
+        print("Getting edge list ordered by rank...")
+        rank_martrx <- edge_rank_matrix
+        rank_martrx[lower.tri(rank_martrx, diag=T)] <- NA
+        edge_df <- as.data.frame(as.table(rank_martrx))
+        edge_df <- edge_df[-which(is.na(edge_df$Freq)),]
+        edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), rank=edge_df$Freq, stringsAsFactors=F)
+        edge_df <- edge_df[which(edge_df$rank>0),]
+        #edge_rank <- edge_df$edge[order(edge_df$rank, decreasing=T)]
+        edge_rank <- edge_df$edge[order(edge_df$rank, decreasing=F)]
+
+        res_ll <- list(bin_mat=bin_mat, edge_rank=edge_rank)
+
+	print("Returning!")
+	return(res_ll)
 }
 
 #' Create iGraph object from a symmetrical adjacency matrix, annotate it with centrality attributes and return the annotated iGraph.
@@ -352,7 +422,15 @@ annotate_iGraph <- function(iG){
 #' @return igraph object with user provided vertex color for normal and highlighted vertices.
 #' @examples
 #' \dontrun{
-#' set_vertex_color(iGraph=inferred.igraph, gx_data_table=gene_expression.df, dgx_table=differential_gene_expression.df, pos_cor_color=color.pos, pos_cor_highlight_color=color.pos.highlight, neg_cor_color=color.neg, neg_cor_highlight_color=color.neg.highlight, pos_perc=pos.threshold, neg_perc=neg.threshold)
+#' set_vertex_color(iGraph=inferred.igraph,
+#' gx_data_table=gene_expression.df,
+#' dgx_table=differential_gene_expression.df,
+#' pos_cor_color=color.pos, pos_cor_highlight_color=color.pos.highlight,
+#' neg_cor_color=color.neg,
+#' neg_cor_highlight_color=color.neg.highlight,
+#' pos_perc=pos.threshold,
+#' neg_perc=neg.threshold
+#' )
 #' }
 #' @keywords internal
 #' @export
@@ -399,7 +477,13 @@ set_vertex_color <- function(iGraph, gx_data_table, dgx_table, pos_cor_color="sa
 #' @return igraph object with user provided vertex color for normal and highlighted vertices.
 #' @examples
 #' \dontrun{
-#' set_edge_color(iGraph=inferred.igraph, gx_data_table=gene_expression.df, pos_cor_color=color.pos, pos_cor_highlight_color=color.pos.highlight, neg_cor_color=color.neg, neg_cor_highlight_color=color.neg.highlight)
+#' set_edge_color(iGraph=inferred.igraph,
+#' gx_data_table=gene_expression.df,
+#' pos_cor_color=color.pos,
+#' pos_cor_highlight_color=color.pos.highlight,
+#' neg_cor_color=color.neg,
+#' neg_cor_highlight_color=color.neg.highlight
+#' )
 #' }
 #' @keywords internal
 #' @export
@@ -439,7 +523,16 @@ set_edge_color <- function(iGraph, gx_data_table, pos_cor_color="salmon", pos_co
 #' @return vector of genes ordered by rank, based on the selected attributes associated to each gene.
 #' @examples
 #' \dontrun{
-#' get_ranked_gene_list(iGraph=inferred.igraph, rank_list_attr=c("betweenness", "cc", "degree", "eccentricity", "closeness", "eigenvector", "score"), debug_output=FALSE)
+#' get_ranked_gene_list(iGraph=inferred.igraph,
+#' rank_list_attr=c("betweenness",
+#' "cc",
+#' "degree",
+#' "eccentricity",
+#' "closeness",
+#' "eigenvector",
+#' "score"),
+#' debug_output=FALSE
+#' )
 #' }
 #' @keywords internal
 #' @export
@@ -528,6 +621,404 @@ get_sub_graph <- function(iGraph, selected_vertices, vertex_level=1, shortest_pa
 	subiGraph 
 }
 
+#' Get modules from the main igraph.
+#'
+#' Extract modules from the main graph by using a specified community detection algorithm from igraph.
+#'
+#' @importFrom igraph cluster_walktrap cluster_spinglass cluster_louvain cluster_fast_greedy
+#'
+#' @param iGraph igraph object representing the main graph from which the subgraph should be extracted.
+#' @param method community detection method from igraph.
+#' @return communities object cotaining communities identified from igraph object by using a specific method
+#' @examples
+#' \dontrun{
+#' get_modules(iGraph=main.graph, method="walktrap")
+#' }
+#' @keywords internal
+#' @export
+get_modules <- function(iGraph, method="walktrap")
+{
+	switch(method,
+	"walktrap" = {
+		optimalStep <- c(2:10)[which.max(sapply(c(2:10), function(x){igraph::modularity(igraph::cluster_walktrap(iGraph, step=x))}))]
+		igraph::cluster_walktrap(iGraph, step=optimalStep)
+	},
+	"spinglass" = igraph::cluster_spinglass(iGraph),
+	"louvain" = igraph::cluster_louvain(iGraph),
+	"greedy" = igraph::cluster_fast_greedy(iGraph)
+       ) 
+}
+
+#' Annotate modules identified from the main igraph.
+#'
+#' Annotate modules and return list-of-list containing igraph objects, annotation enrichment and ranks.
+#'
+#' @import org.Hs.eg.db
+#' @import org.Mm.eg.db
+#' @importFrom AnnotationDbi select
+#' @importFrom igraph communities induced.subgraph get.edgelist
+#'
+#' @param iGraph igraph object representing the main graph from which the subgraph should be extracted.
+#' @param modules Modules detected from the main igraph with specific community detection method.
+#' @param rl Ordered ranked list of genes obtained by taking median rank from Borda over all scores.
+#' @param rl.c Ordered ranked list of genes obtained by taking median rank from Borda over centrality scores.
+#' @param rl.pv Ordered ranked list of genes by P.Value obtained from differential expression analysis.
+#' @param rl.lfc Ordered ranked list of genes by Log FC obtained from differential expression analysis.
+#' @param rl.edge Ordered ranked list of edges obtained by taking median rank from Borda over ranked edges from matrices inferred by different algorithms.
+#' @param annDB Organism specific annotation library default:'org.Hs.eg.db'.
+#' @param min_mod_size Minimum module size to select modules for annotation and to be added in results; DEFAULT:10.
+#' @param prefix string to prefix module names; DEFAULT:NULL.
+#' @return list-of-list containing igraph objects, annotation enrichment and median values for vertice and edges by different rank lists in each module
+#' @examples
+#' \dontrun{
+#' annotate_modules(iGraph=main.graph,
+#' modules,
+#' rl,
+#' rl.c,
+#' rl.pv,
+#' rl.lfc,
+#' rl.edge,
+#' annDB="org.Hs.eg.db",
+#' min_mod_size=10,
+#' prefix=NULL
+#' )
+#' }
+#' @keywords internal
+#' @export
+annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv, rl.lfc, rl.edge, annDB="org.Hs.eg.db", min_mod_size=10, prefix=NULL){
+	res_ll <- list()
+	res_ll[["names"]] <- igraph::communities(modules)
+
+	#Filter modules by size	
+	len_vec <- as.vector(unlist(lapply(res_ll[["names"]], length)))
+	idx <- which(len_vec<min_mod_size)
+	if(length(idx)>0){
+		res_ll[["names"]] <- res_ll[["names"]][-idx]
+	}
+
+        if(!is.null(prefix)){
+                names(res_ll[["names"]]) <- paste0(prefix, "_", c(1:length(res_ll[["names"]])))
+        }
+	res_ll[["ig"]] <- lapply(res_ll[["names"]], function(x){igraph::induced.subgraph(iGraph, x)})
+	res_ll[["ae"]] <- lapply(
+		res_ll[["names"]], function(x){
+			res <- annotation_enrichment(genelist=x, annDB=annDB)
+			res <- res[res$ease<=0.05,]
+			if(nrow(res)==0)
+			return(NULL)
+		
+			selectAnnDF <- AnnotationDbi::select(GO.db, keys=as.vector(res$ID), columns=c("TERM", "ONTOLOGY"), keytype="GOID")
+			#res <- cbind(selectAnnDF, res[,c(3,2)])
+			#colnames(res)[c(4,5)] <- c("Score", "Genes")
+			res <- cbind(selectAnnDF, res[,c("pValue", "ease", "User_Genes", "Symbols")])
+			colnames(res)[c(4:ncol(res))] <- c("P_Value", "EASE_Score", "Gene_Count", "Genes")
+			res
+		}
+	)
+	res_ll[["ranks"]] <- lapply(
+		res_ll[["names"]],
+		function(x){
+			tmp_list <- list()
+			tmp_list[["rank_combined"]] <- round(1-(median(which(rl %in% x))/length(rl)),2)
+			tmp_list[["rank_centrality"]] <- round(1-(median(which(rl.c %in% x))/length(rl.c)),2)
+			tmp_list[["rank_pv"]] <- round(1-(median(which(rl.pv %in% x))/length(rl.pv)),2)
+			tmp_list[["rank_lfc"]] <- round(1-(median(which(rl.lfc %in% x))/length(rl.lfc)),2)
+			el <- apply(igraph::get.edgelist(igraph::induced.subgraph(iGraph, x)), 1, paste, collapse=";")
+			tmp_list[["rank_edge"]] <- round(1-(median(which(rl.edge %in% el))/length(rl.edge)),2)
+			tmp_list
+		}
+	)
+	return(res_ll)
+}
+
+get_rank_table <- function(iGraph, gene_ll, ae_ll, rl, rl.c, rl.pv, rl.lfc, rl.edge, annDB="org.Hs.eg.db", IC_ll=NULL){
+	#res_ll <- list()
+	res_ll <- lapply(
+		gene_ll,
+		function(x){
+			res <- c()
+			res["rank_combined"] <- round(1-(median(which(rl %in% x))/length(rl)),2)
+			res["rank_centrality"] <- round(1-(median(which(rl.c %in% x))/length(rl.c)),2)
+			res["rank_pv"] <- round(1-(median(which(rl.pv %in% x))/length(rl.pv)),2)
+			res["rank_lfc"] <- round(1-(median(which(rl.lfc %in% x))/length(rl.lfc)),2)
+			el <- apply(igraph::get.edgelist(igraph::induced.subgraph(iGraph, x)), 1, paste, collapse=";")
+			res["rank_edge"] <- round(1-(median(which(rl.edge %in% el))/length(rl.edge)),2)
+                        res["size"] <- round(length(x)/igraph::vcount(iGraph),2)
+			res
+		}
+	)
+        resDF <- as.data.frame(t(as.data.frame(res_ll)))
+
+	#resDF[,"GO"] <- rep(NA, nrow(resDF))
+	#tmp_vec <- unlist(lapply(ae_ll, function(x) get_jaccard_sim(x, x, IC_ll=IC_ll)))
+	#idx <- which(rownames(resDF) %in% names(tmp_vec))
+	#if(length(idx)>0){
+	#	resDF[idx,"GO"] <- tmp_vec
+	#}
+
+	return(resDF)
+}
+
+#' Convert annotated modules list-of-list to data frame containing rank and size.
+#'
+#' Converts the list-of-list object of annotated modules and returns a data frame with annotation information, ready to be used for plotting.
+#'
+#' @import org.Hs.eg.db
+#' @import org.Mm.eg.db
+#' @importFrom AnnotationDbi select
+#' @importFrom igraph vcount
+#'
+#' @param iGraph igraph object representing the main graph from which the subgraph should be extracted.
+#' @param annotated_modules_ll list-of-list containing igraph objects, annotation enrichment and ranks for each module.
+#' @param IC_ll list-of-list containing GOSemSimDATA objects for BP, MF and CC.
+#' @param prefix string to prefix module names; DEFAULT:NULL.
+#' @return Data frame containing median(ranks), size and GO within similarity.
+#' @examples
+#' \dontrun{
+#' as.rank.table(iGraph=main.graph, annotated_modules_ll, IC_ll=NULL, prefix=NULL)
+#' }
+#' @keywords internal
+#' @export
+as.rank.table <- function(iGraph, annotated_modules_ll, IC_ll=NULL, prefix=NULL){
+	resDF <- as.data.frame(t(as.data.frame(lapply(annotated_modules_ll[["ranks"]], unlist))))
+        if(!is.null(prefix)){
+                rownames(resDF) <- paste0(prefix, "_", c(1:nrow(resDF)))
+        }
+	resDF[,"size"] <- unlist(lapply(annotated_modules_ll[["names"]], function(x){round(length(x)/igraph::vcount(iGraph),2)}))
+
+	#resDF[,"GO"] <- rep(NA, nrow(resDF))
+	#tmp_vec <- unlist(lapply(annotated_modules_ll[["ae"]], function(x) get_jaccard_sim(x, x, IC_ll=IC_ll)))
+        #if(!is.null(prefix)){
+        #        names(tmp_vec) <- paste0(prefix, "_", names(tmp_vec))
+        #}
+	#idx <- which(rownames(resDF) %in% names(tmp_vec))
+	#if(length(idx)>0){
+	#	resDF[idx,"GO"] <- tmp_vec
+	#}
+
+	return(resDF)
+}
+
+#' Get Jaccard Index.
+#'
+#' Get Jaccard index for two sets (vectors) of identifiers.
+#'
+#' @param set1 Set of identifiers provided as a vector.
+#' @param set2 Set of identifiers provided as a vector.
+#' @return Numerical value between 0 and 1 representing the Jaccard similarity coefficient.
+#' @examples
+#' \dontrun{
+#' get_jaccard(set1, set2)
+#' }
+#' @keywords internal
+#' @export
+get_jaccard <- function(set1, set2){
+	val <- length(intersect(set1, set2))/length(union(set1, set2))
+	return(val)
+}
+
+#' Get Jaccard Index with Sematic Support.
+#'
+#' Get Jaccard index for two sets (data frame) of annotation enrichment results with the support of semantic similarity between GO terms to perform intersection.
+#'
+#' @importFrom GOSemSim godata mgoSim
+#' @importFrom AnnotationDbi select
+#' @importFrom stats setNames
+#'
+#' @param set1 Set of identifiers provided as a vector.
+#' @param set2 Set of identifiers provided as a vector.
+#' @param simThr Threshold of semantic similarity score to consider items as similar; DEFAULT:0.6.
+#' @param IC_ll list-of-list containing GOSemSimDATA objects for BP, MF and CC.
+#' @param annDB Organism specific annotation library default:'org.Hs.eg.db'.
+#' @return Numerical value between 0 and 1 representing the Jaccard similarity coefficient.
+#' @examples
+#' \dontrun{
+#' get_jaccard_sim(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg.db")
+#' }
+#' @keywords internal
+#' @export
+get_jaccard_sim <- function(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg.db"){
+        if(is.null(set1) || is.null(set2))
+        return(NULL)
+        
+	setU <- unique(c(set1[,"GOID"], set2[,"GOID"]))
+	goVec <- setNames(rep(0, length(setU)), setU)
+	
+	GODB_vals = AnnotationDbi::select(GO.db, keys(GO.db, "GOID"), c("TERM", "ONTOLOGY"))
+        GODB_vals_ll <- list()
+        GODB_vals_ll[["BP"]] <- GODB_vals[GODB_vals$ONTOLOGY=="BP",c("GOID", "TERM")]
+        GODB_vals_ll[["CC"]] <- GODB_vals[GODB_vals$ONTOLOGY=="CC",c("GOID", "TERM")]
+        GODB_vals_ll[["MF"]] <- GODB_vals[GODB_vals$ONTOLOGY=="MF",c("GOID", "TERM")]
+
+        simScore_list <- list()
+        for(typ in c("BP", "CC", "MF")){
+                #print(paste0("###### Computing For Ontology - ", typ, ' ######'))
+                ont1 <- set1[set1$ONTOLOGY == typ,]
+                ont2 <- set2[set2$ONTOLOGY == typ,]
+                
+                if(nrow(ont1)==0 || nrow(ont2)==0)
+                next
+                
+		if(is.null(IC_ll) || length(which(names(IC_ll) %in% typ))==0){
+			d <- GOSemSim::godata(annDB, ont=typ, computeIC=TRUE)
+		}else{
+			d <- IC_ll[[typ]]
+		}
+                
+                ont_ids1 <- as.character(ont1[which(ont1$GOID %in% GODB_vals_ll[[typ]]$GOID), "GOID"])
+                ont_ids2 <- as.character(ont2[which(ont2$GOID %in% GODB_vals_ll[[typ]]$GOID), "GOID"])
+
+		scoreMat <- GOSemSim::mgoSim(ont_ids1, ont_ids2, semData=d, measure="Rel", combine=NULL)
+		scoreDF <- as.data.frame(as.table(scoreMat), stringsAsFactors=F)
+		idx <- which(scoreDF[,3]>=simThr)
+		if(length(idx)>0){
+			simID <- unique(c(scoreDF[idx,1], scoreDF[idx,2]))
+			goVec[simID] <- 1
+		}
+	}
+	
+	valI <- length(which(goVec==1))
+	valU <- length(setU)
+	val <- valI/valU
+	return(val)
+}
+
+#' Get similarity between all pairs of elements between two lists of enriched annotations by using modified Jaccard with semsim.
+#'
+#' Get similarity between all pairs of elements between two lists of enriched annotations by using modified Jaccard with semsim.
+#'
+#' @importFrom GOSemSim godata mgoSim
+#'
+#' @param mod_ll1 list-of-list containing igraph objects, annotation enrichment and ranks for each module.
+#' @param mod_ll2 list-of-list containing igraph objects, annotation enrichment and ranks for each module.
+#' @param prefix1 prefix string for module names in mod_ll1; DEFAULT:NULL.
+#' @param prefix2 prefix string for module names in mod_ll2; DEFAULT:NULL.
+#' @param IC_ll list-of-list containing GOSemSimDATA objects for BP, MF and CC.
+#' @return Numerical matrix representing the Jaccard similarity coefficient between pairs of mods from mod_ll1 vs mod_ll2.
+#' @examples
+#' \dontrun{
+#' get_between_GO_sim(mod_ll1, mod_ll2, prefix1=NULL, prefix2=NULL, IC_ll=NULL)
+#' }
+#' @keywords internal
+#' @export
+get_between_GO_sim <- function(mod_ll1, mod_ll2, prefix1=NULL, prefix2=NULL, IC_ll=NULL){
+	ae_list1 <- mod_ll1[["ae"]]
+	ae_list2 <- mod_ll2[["ae"]]
+	l1 <- length(ae_list1)
+	l2 <- length(ae_list2)
+	
+	#if(is.null(prefix1))
+	#prefix1 <- "A"
+	#
+	#if(is.null(prefix2))
+	#prefix2 <- "B"
+
+	names1 <- paste0(prefix1, names(ae_list1))
+	#print(names1)
+	names(ae_list1) <- names1
+	names2 <- paste0(prefix2, names(ae_list2))
+	#print(names2)
+	names(ae_list2) <- names2
+	
+	res <- matrix(data=rep(0, l1*l2), nrow=l1, ncol=l2, dimnames=list(names1, names2))
+	for(m1 in names(ae_list1)){
+		if(is.null(ae_list1[[m1]]))
+		next
+		
+		for(m2 in names(ae_list2)){
+			if(is.null(ae_list2[[m2]]))
+			next
+		
+			res[m1,m2] <- get_jaccard_sim(ae_list1[[m1]], ae_list2[[m2]], IC_ll=IC_ll)
+			#print(res[m1,m2])
+		}
+	}
+	return(res)
+}
+
+#' Get color gradients.
+#'
+#' Get color gradients by providing the reference colors for the lower and higher spectrum of the gradient and the size of the gradient.
+#'
+#' @importFrom grDevices colorRampPalette
+#'
+#' @param low Reference color for the lower end of the gradient spectrum; must be a valid argument to 'col2rgb()'.
+#' @param high Reference color for the higher end of the gradient spectrum; must be a valid argument to 'col2rgb()'.
+#' @param ncolors Number of colors in the gradient composition.
+#' @return Gradient of colors as a vector.
+#' @examples
+#' \dontrun{
+#' get_col_gradient(low="red", high="yellow", ncolors=123)
+#' }
+#' @keywords internal
+#' @export
+get_col_gradient <- function(low="red", high="yellow", ncolors=123) {
+	rbPal <- grDevices::colorRampPalette(c(low,high))
+	colGradient <- rbPal(ncolors)
+	return(colGradient)
+}
+
+#' Plot heatmap of the similarity matrix.
+#'
+#' Plot heatmap of the similarity matrix.
+#'
+#' @importFrom stats as.dist hclust as.dendrogram
+#'
+#' @param hSim Similarity matrix for plotting heatmap.
+#' @param rSim Similarity matrix for clustering the items on the rows of hSim.
+#' @param cSim Similarity matrix for clustering the items on the columns of hSim.
+#' @return Heatmap plot with row and column clusters.
+#' @examples
+#' \dontrun{
+#' plot_sim_heatmap(hSim, rSim=NULL, cSim=NULL)
+#' }
+#' @keywords internal
+#' @export
+plot_sim_heatmap <- function(hSim, rSim=NULL, cSim=NULL){
+	rDend <- NULL
+	if(!is.null(rSim)){
+		rDat <- rSim
+		rDat <- rDat[rowSums(rDat)>0,] 
+		rDat <- rDat[,colSums(rDat)>0]
+		rd <- stats::as.dist(1-rDat)
+		rc <- stats::hclust(rd)
+		rDend <- stats::as.dendrogram(rc)
+	
+	}
+
+	cDend <- NULL
+	if(!is.null(cSim)){
+		cDat <- cSim
+		cDat <- cDat[rowSums(cDat)>0,] 
+		cDat <- cDat[,colSums(cDat)>0]
+		cd <- stats::as.dist(1-t(cDat))
+		cc <- stats::hclust(cd)
+		cDend <- stats::as.dendrogram(cc)
+	}
+
+	hot_data <- hSim
+	hot_data <- hot_data[rowSums(hot_data)>0,] 
+	hot_data <- hot_data[,colSums(hot_data)>0]
+	hot_data <- 1-hot_data
+
+	#lowcol <- "yellow"
+	#highcol <- "red"
+	lowcol <- "red"
+	highcol <- "yellow"
+	plotcols <- get_col_gradient(lowcol, highcol)
+	heatmap.2(hot_data,
+		Rowv=rDend,
+		Colv=cDend,
+		dendrogram="both",
+		scale="none",
+		col=plotcols,
+		cexCol=1,
+		margins=c(8,8),
+		zlim=c(0,1),
+		trace="none"
+	)
+}
+
 #' Update selected vertices with highlight color.
 #'
 #' Alter the color information in the selected nodes, when plotted these vertices will identified with the alternate color from the rest of the vertices.
@@ -549,15 +1040,6 @@ highlight_vertices <- function(iGraph, selected_vertices)
 	igraph::V(iGraph)$color[vertices2Highlight] <- igraph::V(iGraph)$highlightcolor[vertices2Highlight]
 	iGraph
 }
-
-#make_sub_ggplot <- function(candidates){
-#        "Make ggplot object from sub iGraph."
-#        local_igraph <- info_subGraph
-#
-#        print("Getting sub ggplot...")
-#        print(igraph::list.vertex.attributes(local_igraph))
-#        info_subGGplot <<- get_ggplot(local_igraph)
-#}
 
 #' Get enriched GO.
 #'
@@ -586,7 +1068,7 @@ annotation_enrichment <- function(genelist, annType="GO", annDB="org.Hs.eg.db"){
 	annDB <- get(annDB)
 	genelist.len <- length(genelist)
 	print("Creating Res DF...")
-	selectDF <- select(annDB, keys=genelist, columns=keyType, keytype="SYMBOL")
+	selectDF <- AnnotationDbi::select(annDB, keys=genelist, columns=keyType, keytype="SYMBOL")
 	selectDF <- selectDF[selectDF$EVIDENCE != "ND",]
 	if(annType == "GO_SLIM"){
 		print("Use GO SLIM Instead of ALL!")
@@ -608,7 +1090,7 @@ annotation_enrichment <- function(genelist, annType="GO", annDB="org.Hs.eg.db"){
 	colnames(resDF) <- c("ID", "Symbols", "User_Genes")
 	resDF$User_Genes_Not_In <- genelist.len-resDF$User_Genes
 	print("Getting All Genes for mapped IDs...")
-	selectAnnDF <- select(annDB, keys=resDF$ID, columns="ENTREZID", keytype=keyType)
+	selectAnnDF <- AnnotationDbi::select(annDB, keys=resDF$ID, columns="ENTREZID", keytype=keyType)
 	colnames(selectAnnDF)[1] <- "ID"
 	print("Getting Gene count for each ID...")
 	resDF$ALL_Genes <- plyr::ddply(selectAnnDF,.(ID),nrow)[,2]
@@ -682,45 +1164,10 @@ progressive_enrichment <- function(genelists, l1, l2, l3)
 	colnames(all_fltr_union_score) <- c("ID", "Score")
 	all_fltr_union_score <- cbind(all_fltr_union_score, unname(sapply(all_fltr_union_score$ID, function(x) l3[which(l3$ID == x),2])))
 	colnames(all_fltr_union_score) <- c("ID", "Score", "Genes")
-	selectAnnDF <- select(GO.db, keys=as.vector(all_fltr_union_score$ID), columns=c("TERM", "ONTOLOGY"), keytype="GOID")
+	selectAnnDF <- AnnotationDbi::select(GO.db, keys=as.vector(all_fltr_union_score$ID), columns=c("TERM", "ONTOLOGY"), keytype="GOID")
 	all_fltr_union_score <-  cbind(selectAnnDF, all_fltr_union_score[,c(2,3)])
 	all_fltr_union_score
 }
-
-#get_go_freq <- function(annDB="org.Hs.eg.db"){
-#	annDB <- get(annDB)
-#	selectAnnDF <- select(annDB, keys=keys(annDB, keytype="GO"), columns="ENTREZID", keytype="GO")
-#	colnames(selectAnnDF)[1] <- "ID"
-#	go_map_DF <- plyr::ddply(selectAnnDF,.(ID),nrow)
-#	colnames(go_map_DF) <- c("ID", "ALL_Genes")
-#	genome.len <- length(unique(keys(annDB, keytype="ENTREZID")))
-#	go_map_DF$Freq <- round((go_map_DF$ALL_Genes/genome.len)*100,2)
-#	return(go_map_DF)
-#}
-
-#get_semsim <- function(input_GO_DF){
-#	out_semsim_table <- list()
-#
-#	BP_semsim <- mgoSim(input_GO_DF[input_GO_DF$ONTOLOGY == "BP", 1], input_GO_DF[input_GO_DF$ONTOLOGY == "BP", 1],  measure="Rel", ont="BP", combine=NULL)
-#	BP_semsim <- round(BP_semsim, 2)
-#	out_semsim_table[["BP"]] <- as.data.frame(as.table(BP_semsim))
-#	out_semsim_table[["BP"]] <- out_semsim_table[["BP"]][which(upper.tri(BP_semsim, diag=FALSE)),]
-#	colnames(out_semsim_table[["BP"]]) <- c("ID1", "ID2", "SIM")
-#
-#	CC_semsim <- mgoSim(input_GO_DF[input_GO_DF$ONTOLOGY == "CC", 1], input_GO_DF[input_GO_DF$ONTOLOGY == "CC", 1],  measure="Rel", ont="CC", combine=NULL)
-#	CC_semsim <- round(CC_semsim, 2)
-#	out_semsim_table[["CC"]] <- as.data.frame(as.table(CC_semsim))
-#	out_semsim_table[["CC"]] <- out_semsim_table[["CC"]][which(upper.tri(CC_semsim, diag=FALSE)),]
-#	colnames(out_semsim_table[["CC"]]) <- c("ID1", "ID2", "SIM")
-#
-#	MF_semsim <- mgoSim(input_GO_DF[input_GO_DF$ONTOLOGY == "MF", 1], input_GO_DF[input_GO_DF$ONTOLOGY == "MF", 1],  measure="Rel", ont="MF", combine=NULL)
-#	MF_semsim <- round(MF_semsim, 2)
-#	out_semsim_table[["MF"]] <- as.data.frame(as.table(MF_semsim))
-#	out_semsim_table[["MF"]] <- out_semsim_table[["MF"]][which(upper.tri(MF_semsim, diag=FALSE)),]
-#	colnames(out_semsim_table[["MF"]]) <- c("ID1", "ID2", "SIM")
-#
-#	return(out_semsim_table)
-#}
 
 #' Summarize the GO information from the progressively enriched GO table.
 #'
@@ -733,15 +1180,28 @@ progressive_enrichment <- function(genelists, l1, l2, l3)
 #' @importFrom stats hclust as.dist cutree
 #'
 #' @param enriched_GO_DF Data frame containing progressively enriched GO along with an enrichment score.
+#' @param score_col column from the enrichment data frame to use as score.
+#' @param annDB Organism specific annotation library default:'org.Hs.eg.db'.
+#' @param simMeasure GOSemSim measure to use for computing semantic similarity between GOs.
+#' @param treeHeight Value used to cut the clustered tree and define clusters.
+#' @param IC_ll list-of-list containing GOSemSimDATA objects for BP, MF and CC.
+#' @param log_transform Log transform the score as -log10(score), for P.Values; DEFAULT:TRUE.
 #' @return List of data frames containing clustered GO information, with major terms and individual terms. One data frame for each GO type BP, CC and MF.
 #' @examples
 #' \dontrun{
-#' go_summarization(enriched_GO_DF, annDB="org.Hs.eg.db", simMeasure="Rel", treeHeight=9)
+#' go_summarization(enriched_GO_DF,
+#' score_col="EASE_Score",
+#' annDB="org.Hs.eg.db",
+#' simMeasure="Rel",
+#' treeHeight=9,
+#' IC_ll=NULL,
+#' log_transform=TRUE
+#' )
 #' }
 #' @keywords internal
 #' @export
-go_summarization <- function(enriched_GO_DF, annDB="org.Hs.eg.db", simMeasure="Rel", treeHeight=9){
-	GODB_vals = select(GO.db, keys(GO.db, "GOID"), c("TERM", "ONTOLOGY"))
+go_summarization <- function(enriched_GO_DF, score_col="EASE_Score", annDB="org.Hs.eg.db", simMeasure="Rel", treeHeight=9, IC_ll=NULL, log_transform=TRUE){
+	GODB_vals = AnnotationDbi::select(GO.db, keys(GO.db, "GOID"), c("TERM", "ONTOLOGY"))
 	GODB_vals_ll <- list()
 	GODB_vals_ll[["BP"]] <- GODB_vals[GODB_vals$ONTOLOGY=="BP",c("GOID", "TERM")]
 	GODB_vals_ll[["CC"]] <- GODB_vals[GODB_vals$ONTOLOGY=="CC",c("GOID", "TERM")]
@@ -751,13 +1211,24 @@ go_summarization <- function(enriched_GO_DF, annDB="org.Hs.eg.db", simMeasure="R
 	for(typ in c("BP", "CC", "MF")){
 		print(paste0("###### Clustering For Ontology - ", typ, ' ######'))
 		ont <- enriched_GO_DF[enriched_GO_DF$ONTOLOGY == typ,]
+		if(log_transform==TRUE){
+			print("*** LOG TRANSFORMING ***")
+			ont[,score_col] <- -log10(ont[,score_col])
+		}
 		ont_ids <- as.character(ont[which(ont$GOID %in% GODB_vals_ll[[typ]]$GOID), "GOID"])
 
 		#simsem_matrix <- GOSemSim::mgoSim(ont_ids, ont_ids,  measure="Rel", ont=typ, organism="human", combine=NULL)
-                d <- godata(annDB, ont=typ, computeIC=TRUE)
+
+                #d <- godata(annDB, ont=typ, computeIC=TRUE)
+		if(is.null(IC_ll) || length(which(names(IC_ll) %in% typ))==0){
+			d <- GOSemSim::godata(annDB, ont=typ, computeIC=TRUE)
+		}else{
+			d <- IC_ll[[typ]]
+		}
+
 		simsem_matrix <- GOSemSim::mgoSim(ont_ids, ont_ids, semData=d, measure="Rel", combine=NULL)
 		dim_len <- dim(simsem_matrix)[1]
-		print(dim_len)
+		#print(dim_len)
 		simsem_matrix_clean <- simsem_matrix[rowSums(is.na(simsem_matrix))!=dim_len, colSums(is.na(simsem_matrix))!=dim_len]
 		simsem_matrix <- round(simsem_matrix_clean, 2)
 		
@@ -769,11 +1240,12 @@ go_summarization <- function(enriched_GO_DF, annDB="org.Hs.eg.db", simMeasure="R
 		
 		for(i in unique(simClust_cut)){
 			memberIDs <- names(simClust_cut[simClust_cut == i])
-			#clustID <- paste0(typ, "_", i)
-			selRow <- ont[which(ont$GOID %in% memberIDs), c("TERM", "Score")]
-                        clustID <- selRow[which.max(selRow$Score), "TERM"]
-			#clustID <- selRow[which(selRow$Score==max(selRow$Score)), "TERM"]
-			localDF <- data.frame(ID=memberIDs, TERM=selRow$TERM, Score=selRow$Score, Representative=clustID, stringsAsFactors=F)
+			#selRow <- ont[which(ont$GOID %in% memberIDs), c("TERM", "Score")]
+                        #clustID <- selRow[which.max(selRow$Score), "TERM"]
+			#localDF <- data.frame(ID=memberIDs, TERM=selRow$TERM, Score=selRow$Score, Representative=clustID, stringsAsFactors=F)
+			selRow <- ont[which(ont$GOID %in% memberIDs), c("TERM", score_col)]
+                        clustID <- selRow[which.max(selRow[,score_col]), "TERM"]
+			localDF <- data.frame(ID=memberIDs, TERM=selRow$TERM, Score=selRow[,score_col], Representative=clustID, stringsAsFactors=F)
 			simClust_DF[[typ]] <- rbind(simClust_DF[[typ]], localDF)
 		}
 		print(paste0("###### Completed CLustering For Ontology - ", typ, ' ######'))
@@ -821,55 +1293,6 @@ plot_treemap <- function(input.DF, ont="BP"){
 	)
 }
 
-#get_ggplot = function(iG, plot_layout="with_fr"){
-#        "Get ggplot object representing the input iGraph."
-#        local_igraph <- iG
-#
-#        #iG.fr <- layout.fruchterman.reingold(local_igraph)
-#        #layout_format = "with_sphere"
-#        layout_format <- plot_layout
-#        iG.fr <- layout_(local_igraph, layout=get(layout_format)())
-#        iG.fr.df <- as.data.frame(iG.fr)
-#        iG.fr.df$ver <- igraph::V(local_igraph)$name
-#        iG.fr.df$verColor <- igraph::V(local_igraph)$color
-#        gFrame <- get.data.frame(local_igraph)
-#        gFrame$from.x <- iG.fr.df$V1[match(gFrame$from, iG.fr.df$ver)]
-#        gFrame$from.y <- iG.fr.df$V2[match(gFrame$from, iG.fr.df$ver)]
-#        gFrame$to.x <- iG.fr.df$V1[match(gFrame$to, iG.fr.df$ver)]
-#        gFrame$to.y <- iG.fr.df$V2[match(gFrame$to, iG.fr.df$ver)]
-#        #cPalette <- unique(sort(V(local_igraph)$color))
-#        cPalette <- unique(sort(c(igraph::V(local_igraph)$color, igraph::V(local_igraph)$highlightcolor, igraph::E(local_igraph)$color, igraph::E(local_igraph)$highlightcolor)))
-#        names(cPalette) <- cPalette
-#        #ePalette <- unique(sort(c(E(local_igraph)$color, E(local_igraph)$highlightcolor)))
-#
-#        local_ggplot <- ggplot2::ggplot() +
-#        geom_segment(data=gFrame,aes(x=from.x,xend=to.x,y=from.y,yend=to.y,colour=color)) +
-#        #scale_colour_manual(values=cPalette) +
-#        scale_colour_manual(values=ePalette) +
-#        geom_point(data=iG.fr.df,aes(x=V1,y=V2),size=21,colour="black") +
-#        geom_point(data=iG.fr.df,aes(x=V1,y=V2,colour=verColor),size=20) +
-#        #scale_colour_manual(values=cPalette) +
-#        scale_colour_manual(name="", values=cPalette) +
-#        geom_text(data=iG.fr.df,aes(x=V1,y=V2,label=ver),size=3) +
-#        scale_x_continuous(expand=c(0,1))+
-#        scale_y_continuous(expand=c(0,1))+
-#        theme_bw()+
-#        theme(
-#                axis.text.x=element_blank(),
-#                axis.text.y=element_blank(),
-#                axis.ticks=element_blank(),
-#                axis.title.x=element_blank(),
-#                axis.title.y=element_blank(),
-#                legend.position="none",
-#                panel.grid.major=element_blank(),
-#                panel.grid.minor=element_blank(),
-#                panel.background=element_blank()
-#        )
-#
-#        write.table(iG.fr.df, file="iG.fr.df.txt", sep="\t", quote=FALSE)	
-#        local_ggplot
-#}
-
 #' Get visNetwork plot object representing the input igraph object.
 #'
 #' Convert the igraph into an interactive visNetwork object for plotting.
@@ -886,7 +1309,15 @@ plot_treemap <- function(input.DF, ont="BP"){
 #' @return visNetwork plot object created from the igraph information.
 #' @examples
 #' \dontrun{
-#' get_visNetwork(iG, plot_layout="nicely", vBorderColor="black", vShape="circle", vFontColor="#343434", vSize=50, eWidth=10, degDepth=2)
+#' get_visNetwork(iG,
+#' plot_layout="nicely",
+#' vBorderColor="black",
+#' vShape="circle",
+#' vFontColor="#343434",
+#' vSize=50,
+#' eWidth=10,
+#' degDepth=2
+#' )
 #' }
 #' @keywords internal
 #' @export
@@ -926,3 +1357,152 @@ get_visNetwork <- function(iG, plot_layout="nicely", vBorderColor="black", vShap
     return(vNet)
 }
 
+#' Get master gene table for the inferred network with ranks, scores and module information.
+#'
+#' Get master gene table for the inferred network with ranks, scores and module information.
+#'
+#' @import org.Hs.eg.db
+#' @import org.Mm.eg.db
+#' @importFrom AnnotationDbi select get
+#'
+#' @param ig igraph object representing the main graph from which the subgraph should be extracted.
+#' @param rankedGenes vector of genes ordered by rank based on the selected attributes associated to each gene.
+#' @param modLL list-of-list containing igraph objects, annotation enrichment and ranks for each module.
+#' @param orgDB Organism specific annotation library default:'org.Hs.eg.db'.
+#' @return Data Frame with gene rank, score and module memebership information.
+#' @examples
+#' \dontrun{
+#' get_master_gene_table <- function(ig, rankedGenes, modLL, orgDB="org.Hs.eg.db")
+#' }
+#' @keywords internal
+#' @export
+get_master_gene_table <- function(ig, rankedGenes, modLL, orgDB="org.Hs.eg.db"){
+	orgDB <- get(orgDB)
+        mapped_df <- AnnotationDbi::select(orgDB, keys=rankedGenes, columns=c("ENSEMBL","ENTREZID","GENENAME"), keytype="SYMBOL")
+        #print(dim(mapped_df))
+        #print(head(mapped_df))
+        tmpDF <- cbind(GENE_RANK=sapply(mapped_df$SYMBOL, function(x) which(rankedGenes %in% x)), mapped_df, SCORE=sapply(mapped_df$SYMBOL, function(x) V(ig)$score[which(V(ig)$name %in% x)]), P_VALUE=sapply(mapped_df$SYMBOL, function(x) V(ig)$pval[which(V(ig)$name %in% x)]), LFC=sapply(mapped_df$SYMBOL, function(x) V(ig)$lfc[which(V(ig)$name %in% x)]))
+        mapped_df <- tmpDF[order(tmpDF$GENE_RANK),]
+        print("Going to add member information...")
+
+	mapped_df[,"MEMBERSHIP"] <- NA
+	geneLL <- modLL[["names"]]
+	for(i in 1:length(geneLL)){
+		modName <- paste0("mod_", i)
+		idx <- which(mapped_df$SYMBOL %in% geneLL[[i]])
+		if(length(idx)>0){
+			idx1 <- which(is.na(mapped_df[idx, "MEMBERSHIP"]))
+			idx2 <- which(!is.na(mapped_df[idx, "MEMBERSHIP"]))
+			
+			if(length(idx1)>0){
+				tmpIdx <- idx[idx1]
+				mapped_df[tmpIdx, "MEMBERSHIP"] <- modName
+			}
+			
+			if(length(idx2)>0){
+				tmpIdx <- idx[idx2]
+				mapped_df[tmpIdx, "MEMBERSHIP"] <- paste(mapped_df[tmpIdx, "MEMBERSHIP"], modName, sep=",")
+			}
+		}
+	}
+	idx <- which(is.na(mapped_df[, "MEMBERSHIP"]))
+	if(length(idx)>0){
+		mapped_df[idx, "MEMBERSHIP"] <- "orphan"
+	}
+        return(mapped_df)
+}
+
+#' Get module gene tables.
+#'
+#' Get gene tables for modules in the list-of-list object containing gene rank and scores.
+#'
+#' @import org.Hs.eg.db
+#' @import org.Mm.eg.db
+#' @importFrom AnnotationDbi select get
+#'
+#' @param ig igraph object representing the main graph from which the subgraph should be extracted.
+#' @param rankedGenes vector of genes ordered by rank based on the selected attributes associated to each gene.
+#' @param modLL list-of-list containing igraph objects, annotation enrichment and ranks for each module.
+#' @param orgDB Organism specific annotation library default:'org.Hs.eg.db'.
+#' @return List of data frames per modules cotaining gene rank and scores.
+#' @examples
+#' \dontrun{
+#' get_mod_gene_tables(ig, rankedGenes, modLL, orgDB="org.Hs.eg.db")
+#' }
+#' @keywords internal
+#' @export
+get_mod_gene_tables <- function(ig, rankedGenes, modLL, orgDB="org.Hs.eg.db"){
+	orgDB <- get(orgDB)
+	mapped_df_ll <- list()
+	geneLL <- modLL[["names"]]
+	modNames <- names(geneLL)
+	for(i in 1:length(geneLL)){
+		#modName <- paste0("mod_", i)
+		modName <- modNames[i]
+		print("modName:")
+		print(modName)
+		
+		mapped_df <- AnnotationDbi::select(orgDB, keys=geneLL[[i]], columns=c("ENSEMBL","ENTREZID","GENENAME"), keytype="SYMBOL")
+		tmpDF <- cbind(GENE_RANK=sapply(mapped_df$SYMBOL, function(x) which(rankedGenes %in% x)), mapped_df, SCORE=sapply(mapped_df$SYMBOL, function(x) V(ig)$score[which(V(ig)$name %in% x)]), PValue=sapply(mapped_df$SYMBOL, function(x) V(ig)$pval[which(V(ig)$name %in% x)]), LFC=sapply(mapped_df$SYMBOL, function(x) V(ig)$lfc[which(V(ig)$name %in% x)]))
+		
+		mapped_df <- tmpDF[order(tmpDF$GENE_RANK),]
+		mapped_df_ll[[modName]] <- mapped_df
+	}
+        return(mapped_df_ll)
+}
+
+#Resolve multiple attributes created by creating union of igraph modules
+resolve_ig_union_attrs <- function(ig_union, vertex_attr_names, edge_attr_names){
+	#Resolve Vertex Attributes
+	ig_union_df <- igraph::as_data_frame(ig_union, what="vertices")
+	colIdxNames <- NULL
+	
+	#print(paste0("Vertex Attrs : ", vertex_attr_names))
+	for(attr in vertex_attr_names){
+		#print(paste0("Resolving Attr : ", attr))
+		colIdx <- grep(paste0("^", attr, ".*"), colnames(ig_union_df))
+		colIdxNames <- c(colIdxNames, colnames(ig_union_df)[colIdx])
+		#print(paste0("Cols : ", colIdxNames))
+		resAttrVal <- apply(ig_union_df[,colIdx], 1, function(x){idx<-which(!is.na(x));if(length(idx)>0){res<-x[idx[1]]}else{res<-NA};return(res)})
+		igraph::vertex_attr(ig_union, name=attr) <- resAttrVal
+	}
+	#print(list.vertex.attributes(ig_union))
+	
+	#Remove redundant attributes
+	#print("Will Remove Following:")
+	#print(colIdxNames)
+	
+	for(nm in colIdxNames){
+		#print(paste0("Removing Attr : " , nm))
+		ig_union <- igraph::delete_vertex_attr(ig_union, nm)
+	}
+	
+	#Resolve Edge Attributes
+	ig_union_df <- igraph::as_data_frame(ig_union, what="edges")
+	colIdxNames <- NULL
+	
+	for(attr in edge_attr_names){
+		colIdx <- grep(paste0("^", attr, ".*"), colnames(ig_union_df))
+		colIdxNames <- c(colIdxNames, colnames(ig_union_df)[colIdx])
+		resAttrVal <- apply(ig_union_df[,colIdx], 1, function(x){idx<-which(!is.na(x));if(length(idx)>0){res<-x[idx[1]]}else{res<-NA};return(res)})
+		igraph::edge_attr(ig_union, name=attr) <- resAttrVal
+	}
+	#print(list.edge.attributes(ig_union))
+	
+	#Remove redundant attributes
+	for(nm in colIdxNames){
+		#print(paste0("Removing Attr : " , nm))
+		ig_union <- igraph::delete_edge_attr(ig_union, nm)
+	}
+	return(ig_union)
+}
+
+#Set shiny reactive vars and environment to global variables
+set_shiny_vars <- function(shinyVars, shinyEnv=NULL){
+        shiny_app_vars <<- shinyVars
+        if(!is.null(shinyEnv)){
+                if(is.environment(shinyEnv)){
+                        shiny_app_env <<- shinyEnv
+                }
+        }
+}

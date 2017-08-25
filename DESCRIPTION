@@ -33,11 +33,11 @@ Imports:
     treemap,
     visNetwork,
     abind
-Date: 2017-04-27
+Date: 2016-10-04
 Author: Veer Singh Marwah [aut, cre]
 Maintainer: Veer Singh Marwah <veersingh.marwah@gmail.com>
 Description: Network based expression analysis tool for omics data set. It
     provides user with the ranked candidate genes, responsive sub-networks and enriched
     GO annotation.
 License: GPL-3
-RoxygenNote: 5.0.1
+RoxygenNote: 6.0.1

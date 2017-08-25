@@ -1,13 +1,15 @@
-library(shiny)
-library(shinyjs)
-library(shinyBS)
-library(shinydashboard)
-library(DT)
-library(R.utils)
-library(ggplot2)
-library(GSEABase)
-library(visNetwork)
-#source("~/git/INfORM/INfORM_functions.R")
+suppressMessages(library(shiny))
+suppressMessages(library(shinyjs))
+suppressMessages(library(shinyBS))
+suppressMessages(library(shinydashboard))
+suppressMessages(library(DT))
+suppressMessages(library(R.utils))
+suppressMessages(library(ggplot2))
+suppressMessages(library(GSEABase))
+suppressMessages(library(visNetwork))
+suppressMessages(library(randomcoloR))
+suppressMessages(library(radarchart))
+suppressMessages(library(Rserve))
 print("Print Source Directory")
 print(dirname(getSrcDirectory(function(x){x})))
 functions_R <- file.path(dirname(getSrcDirectory(function(x){x})), "INfORM_functions.R")
@@ -28,34 +30,160 @@ tmpMethod <- NULL
 
 shinyServer(
 	function(input, output, session){
-
-		#myValues <- shiny::reactiveValues(gxTable=NULL, dgxTable=NULL, method=methods, est=est.opt, disc=disc.opt, cores=2, rankAttr=rank_attr, gxCorMat=NULL, updateTabCorMat=0, cList=NULL, mList=NULL, GO_clust_summ_list=NULL)
 		myValues <- shiny::reactiveValues(gxTable=NULL, dgxTable=NULL, gxCorMat=NULL, iGraph=NULL, updateTabCorMat=0, cList=NULL, mList=NULL, GO_clust_summ_list=NULL)
+
+		myValues$sepChoices <- c("TAB", ",", ";", "SPACE", "OTHER")
+		myValues$quoteChoices <- c(NA, "SINGLE", "DOUBLE")
+                myValues$envir <- environment()
 
 		myValues$gxTable <- shiny::reactive({
 			gxFile <- input$gx
-			if (is.null(gxFile) || is.null(myValues$dgxTable()))
+			#if (is.null(gxFile) || is.null(myValues$dgxTable()))
+			if (is.null(gxFile) || is.null(myValues$dgxTable))
 			return(NULL)
 
 			print("Reading loaded gx File...")
-			gx <- read.csv(gxFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE)
-                        #gx <- gx[order(rownames(gx)),]
-                        gx <- gx[rownames(myValues$dgxTable()),]
+			gx <- read.csv(gxFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE, stringsAsFactors=FALSE, quote="")
+                        ##gx <- gx[order(rownames(gx)),]
+                        #gx <- gx[rownames(myValues$dgxTable()),]
+                        gx <- gx[rownames(myValues$dgxTable),]
                         gx
 		})
 
-		myValues$dgxTable <- shiny::reactive({
-			print("Checking dgx File...")
-			dgxFile <- input$dgx
-			if (is.null(dgxFile))
+		#myValues$dgxTable <- shiny::reactive({
+		#	print("Checking dgx File...")
+		#	dgxFile <- input$dgx
+		#	if (is.null(dgxFile))
+		#	return(NULL)
+
+		#	print("Reading loaded dgx File...")
+		#	dgx <- read.csv(dgxFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE, stringsAsFactors=FALSE, quote="")
+                #        dgx <- dgx[order(rownames(dgx)),,drop=F]
+                #        print(str(dgx))
+                #        dgx
+		#})
+
+		myValues$inputDgx <- eventReactive(input$load_dgx_submit, {
+			if(is.null(input$dgx))
 			return(NULL)
 
-			print("Reading loaded dgx File...")
-			dgx <- read.csv(dgxFile$datapath, row.names=1, header=FALSE, sep="\t", check.names=FALSE)
-                        dgx <- dgx[order(rownames(dgx)),,drop=F]
-                        print(str(dgx))
-                        dgx
+			dgxFile <- input$dgx
+			sepS <- input$sepS
+			sepT <- input$sepT
+			sepChar=NULL
+			if(sepS=="OTHER"){
+				sepChar <- sepT
+			}else{
+				if(sepS=="TAB"){
+					sepChar="\t"
+				}else if(sepS=="SPACE"){
+					sepChar=" "
+				}else{
+					sepChar=sepS
+				}
+			}
+			print(sepChar)
+
+			quote <- input$quote
+			print(quote)
+			print(is.na(quote))
+			if(is.na(quote) || quote=="NA"){
+				quote <- ""
+			}else if(quote=="SINGLE"){
+				quote <- "'"
+			}else if(quote=="DOUBLE"){
+				quote <- '"'
+			}
+
+			rowNames <- NULL
+			con <- file(dgxFile$datapath, "r", blocking=FALSE)
+			fileLines <- readLines(con)
+			fileLines <- gsub("\t\t", "\tNA\t", fileLines)
+			fileLines <- gsub("\t$", "\tNA", fileLines)
+			close(con)
+			colNumByRowDist <- table(sapply(fileLines, function(x) {length(strsplit(x, sepChar)[[1]])}, USE.NAMES=F))
+			if(length(colNumByRowDist) > 1){
+				fileLines2 <- fileLines[-1]
+				colNumByRowDist2 <- table(sapply(fileLines2, function(x) {length(strsplit(x, sepChar)[[1]])}, USE.NAMES=F))
+				if(length(colNumByRowDist2) > 1){
+					shinyjs::info(paste0("Separating character '", sepChar, "', results in inconsistent number of columns!\n\nPlease check the input file format and select the correct separating character!"))
+					myValues$dgxLoaded <- NULL
+					return(NULL)
+				}
+				rowNames <- 1
+			}
+
+			myValues$dgxLoaded <- 1
+			myValues$dgxFileName <- dgxFile$name
+			dgxTable <- read.csv(dgxFile$datapath, row.names=1, header=TRUE, sep=sepChar, stringsAsFactors=FALSE, quote=quote, as.is=TRUE, strip.white=TRUE, check.names=FALSE)
+
+                        print("str(dgxTable) -- after:")
+                        print(str(dgxTable))
+			return(dgxTable)
 		})
+
+		myValues$dgxColChoices <- reactive({
+			if(is.null(myValues$dgxLoaded))
+			return(c("NA"))
+
+			choicesVec <- seq(1,ncol(myValues$inputDgx()))
+			choicesNames <- paste0("Column ", choicesVec)
+			names(choicesVec) <- choicesNames
+			return(choicesVec)
+		})
+
+		output$dgxDT <- DT::renderDataTable({
+			shiny::validate(
+				need(!is.null(myValues$inputDgx()), "No Differential Expression file!")
+			)
+
+                        dgxTable <- myValues$inputDgx()
+                        colnames(dgxTable) <- paste0(colnames(dgxTable), " [", c(1:ncol(dgxTable)), "]")
+			DT::datatable(dgxTable, filter="none", 
+				options = list(
+					ch = list(regex=TRUE, caseInsensitive=FALSE), 
+					scrollX=TRUE, 
+					pageLength=2,
+					lengthMenu=c(1,2,3),
+					ordering=F
+				)
+			)
+		},server=TRUE)
+
+		observeEvent(input$upload_dgx_submit, {
+			shiny::validate(
+				need(!is.null(myValues$inputDgx()), "No Differential Expression File Provided!")
+			)
+			
+                        dgxTable <- myValues$inputDgx()
+			pvColID <- as.integer(input$pvCol)
+			lfcColID <- as.integer(input$lfcCol)
+
+                        pvals <- dgxTable[,pvColID]
+                        lfcs <- dgxTable[,lfcColID]
+                        if(any(pvals=="") || any(pvals==" ") || any(is.na(pvals))){
+                                shinyjs::info(paste0("The specified P.Value column contains BLANK and/or NA values!\n\nPlease check the differential expression data and ensure that the selected P.Value column has complete information!"))
+                                return(NULL)
+                        }else if(any(pvals<0) || any(pvals>1)){
+                                shinyjs::info(paste0("The specified P.Value column contains values out of 0-1 range!\n\nPlease check the differential expression data and ensure that the selected P.Value column has complete information!"))
+                                return(NULL)
+                        }else if(any(lfcs=="") || any(lfcs==" ") || any(is.na(lfcs))){
+                                shinyjs::info(paste0("The specified LogFC column contains BLANK and/or NA values!\n\nPlease check the differential expression data and ensure that the selected LogFC column has complete information!"))
+                                return(NULL)
+                        }
+
+			colIdx <- which(colnames(dgxTable) %in% c(pvColID,lfcColID))
+			if(length(colIdx)>0){
+				dgxTable <- dgxTable[,colIdx]
+			}
+                        myValues$dgxTable <- dgxTable
+			myValues$pvColID <- pvColID
+			myValues$lfcColID <- lfcColID
+
+			updateTextInput(session, "dgxUploadDisp", value=myValues$dgxFileName)
+			shinyBS::toggleModal(session, "importDgxModal", toggle="close")
+                        shinyBS::updateButton(session, "import_dgx_submit", style="success", icon=icon("check-circle"))
+                })
 
                 myValues$method <- shiny::reactive({
                         if(is.null(input$method))
@@ -95,23 +223,32 @@ shinyServer(
 		observeEvent(input$runINfORM, {
 			print("Run INfORM.....")
 
-                        #shiny::updateTabsetPanel(session, "display", selected="net_display")
+                        #shiny::validate(
+			#	need(!is.null(myValues$gxTable()), "No Gene Expression Table Provided!")
+			#)
+                        #shiny::validate(
+			#	#need(!is.null(myValues$dgxTable()), "No Differential Expression Table Provided!")
+			#	need(!is.null(myValues$dgxLoaded), "No Differential Expression Table Provided!")
+			#)
+			#shiny::validate(
+			#	need(!is.null(myValues$method()), "No Inference Algorithm Selected!")
+			#)
+			#shiny::validate(
+			#	need(!is.null(myValues$est()), "No Correlation Selected!")
+			#)
+			#shiny::validate(
+			#	need(!is.null(myValues$disc()), "No Discretization Method Selected!")
+			#)
 
-                        shiny::validate(
-				need(!is.null(myValues$gxTable()), "No Gene Expression Table Provided!")
-			)
-                        shiny::validate(
-				need(!is.null(myValues$dgxTable()), "No Differential Expression Table Provided!")
-			)
-			shiny::validate(
-				need(!is.null(myValues$method()), "No Inference Algorithm Selected!")
-			)
-			shiny::validate(
-				need(!is.null(myValues$est()), "No Correlation Selected!")
-			)
-			shiny::validate(
-				need(!is.null(myValues$disc()), "No Discretization Method Selected!")
-			)
+                        if(any(
+                                is.null(myValues$gxTable()), 
+                                is.null(myValues$dgxLoaded), 
+                                is.null(myValues$method()), 
+                                is.null(myValues$est()), 
+                                is.null(myValues$disc())
+                        ))
+                        return(NULL)
+
 			print("Passed Validations.....")
 
                         progress <- shiny::Progress$new()
@@ -122,10 +259,22 @@ shinyServer(
 				}
 				progress$set(value = value, detail = detail)
 			}
-                        on.exit(progress$close())
+                        on.exit({
+				progress$close()
+				shiny::updateTabsetPanel(session, "display", selected="corMat_display")
+			})
 
 			localGxTable <- myValues$gxTable()
-			localDgxTable <- myValues$dgxTable()
+			#localDgxTable <- myValues$dgxTable()
+			localDgxTable <- myValues$dgxTable
+
+                        #print("localGxTable : ")
+                        #print(dim(localGxTable))
+                        #print(str(localGxTable))
+                        #print("localDgxTable : ")
+                        #print(dim(localDgxTable))
+                        #print(str(localDgxTable))
+                        #return(NULL)
 
                         corMat <- NULL
                         matFile <- input$mat
@@ -141,15 +290,39 @@ shinyServer(
 
                                 progress$set(message="Inference", value=0)
 
-                                corMat <- get_ranked_consensus_binary_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
+                                ##corMat <- get_ranked_consensus_binary_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
+                                #resL <- get_ranked_consensus_binary_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
+                                #corMat <- resL[["bin_mat"]]
+                                #edgeRank <- resL[["edge_rank"]]
+                                rankMat <- get_ranked_consensus_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
+                                resL <- parse_edge_rank_matrix(rankMat)
+                                corMat <- resL[["bin_mat"]]
+                                edgeRank <- resL[["edge_rank"]]
                         }else{
                                 print("Reading loaded correlation matrix...")
+                                #corMat <- as.matrix(read.csv(matFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE))
+                                rankMat <- as.matrix(read.csv(matFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE))
+                                if(any(is.na(rankMat))){
+                                        shinyjs::info(paste0("Uploaded matrix contains NA values!\n\nPlease ensure that the input matrix contains edge ranks, as exported from INfORM!"))
+                                        return(NULL)
+                                }
+                                if(all(rankMat %in% c(0,1))){
+                                        shinyjs::info(paste0("Uploaded matrix is a binary matrix with values 0 and 1!\n\nPlease ensure that the input matrix contains edge ranks, as exported from INfORM!"))
+                                        return(NULL)
+                                }
+                                print("Rank Mat Str : ")
+                                print(str(rankMat))
+                                resL <- parse_edge_rank_matrix(rankMat)
+                                corMat <- resL[["bin_mat"]]
+                                print("Bin Mat Str : ")
+                                print(str(corMat))
+                                edgeRank <- resL[["edge_rank"]]
+                                print("Edge Rank : ")
+                                print(length(edgeRank))
+                                print(max(edgeRank))
                                 myValues$updateTabCorMat <- 1
-                                corMat <- as.matrix(read.csv(matFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE))
                         }
-
 			localGxCorMat <- corMat
-
                         myValues$totalGenes <- nrow(localGxCorMat)
 
 			##Clean Correlation Matrix
@@ -182,107 +355,220 @@ shinyServer(
 			print("Get IGraph Object...")
                         progress$set(message="Getting iGraph Object", value=0)
                         localIGraph <- get_iGraph(localGxCorMat)
+                        print("Counts localIGraph : ")
+                        print(vcount(localIGraph))
+                        print(ecount(localIGraph))
 
                         print("Setting DGX values as 'score'")
-                        vertex_attr(localIGraph, name="score") <- localDgxTable[V(localIGraph)$name,]
+                        ###vertex_attr(localIGraph, name="score") <- localDgxTable[V(localIGraph)$name,]
+			##pval <- localDgxTable[V(localIGraph)$name,"P.Value"]
+			##lfc <- localDgxTable[V(localIGraph)$name,"logFC"]
+			#pval <- localDgxTable[V(localIGraph)$name, 2]
+			#lfc <- localDgxTable[V(localIGraph)$name, 1]
+			pvColID <- myValues$pvColID
+			lfcColID <- myValues$lfcColID
+			pval <- localDgxTable[V(localIGraph)$name, pvColID]
+			lfc <- localDgxTable[V(localIGraph)$name, lfcColID]
+			score <- lfc * -log10(pval)
+			print("COL IDs:")
+			print("pvColID:")
+			print(pvColID)
+			print("lfcColID:")
+			print(lfcColID)
+			print("DGX TABLE INFO:")
+			print(str(localDgxTable))
+			print(head(localDgxTable))
+			print("EXTRACTED PVAL INFO:")
+			print(head(pval))
+			print("EXTRACTED LFC INFO:")
+			print(head(lfc))
+                        igraph::vertex_attr(localIGraph, name="score") <- score
+			igraph::vertex_attr(localIGraph, name="pval") <- pval
+			igraph::vertex_attr(localIGraph, name="lfc") <- lfc
 
-                        myValues$iGraph <- localIGraph
+                        progress$set(message="Ranking Genes", value=0)
                         rankAttr <- myValues$rankAttr()
-
-                        progress$set(message="Getting Gene Ranks", value=0)
+			rankAttr.c <- rank_attr[-which(rank_attr=="score")]
                         localRankedGenes <- get_ranked_gene_list(localIGraph, rank_list_attr=rankAttr, debug_output=FALSE)
+                        localRankedGenes.c <- get_ranked_gene_list(localIGraph, rank_list_attr=rankAttr.c, debug_output=FALSE)
+                        localRankedGenes.pv <- V(localIGraph)$name[order(V(localIGraph)$pval, decreasing=F)]
+                        localRankedGenes.lfc <- V(localIGraph)$name[order(abs(V(localIGraph)$lfc), decreasing=T)]
+
                         myValues$rankedGenes <- localRankedGenes
 
-			progress$set(message="Getting Candidate Genes", value=0)
-                        if(input$candid_type == "count"){
-                                candidates <- localRankedGenes[c(1:as.integer(input$candid_val))]
-                        }
-                        else{
-                                countForPerc <- round(as.integer(input$candid_val)*length(localRankedGenes)/100)
-                                candidates <- localRankedGenes[c(1:countForPerc)]
-                        }
+			progress$set(message="Module Detection", value=0)
+			updateProgress(detail="Getting Modules...", value=1/4)
 
-			print("Selected Candidates...")
-			print(candidates)
-			myValues$candidates <- candidates
-
-                        progress$set(message="Getting Candidates...", value=0)
-			updateProgress(detail=paste0("Top: ",input$l1_val), value=1/3)
-			l1_candidates <- localRankedGenes[c(1:as.integer(input$l1_val))]
-
-			updateProgress(detail=paste0("Top: ",input$l2_val), value=2/3)
-			l2_candidates <- localRankedGenes[c(1:as.integer(input$l2_val))]
-
-			updateProgress(detail=paste0("Top: ",input$l3_val), value=3/3)
-			l3_candidates <- localRankedGenes[c(1:as.integer(input$l3_val))]
-
-			print("Candidates1:")
-			print(l1_candidates)
-			print("Candidates2:")
-			print(l2_candidates)
-			print("Candidates3:")
-			print(l3_candidates)
-
-			myValues$cList <- list(l1_candidates, l2_candidates, l3_candidates)
-
-			progress$set(message="Getting Sub-Graphs...", value=0)
-			updateProgress(detail=paste0("Top: ",input$l1_val), value=1/3)
-			l1_subGraph <- get_sub_graph(localIGraph, l1_candidates, vertex_level=1, shortest_paths=TRUE)
-			myValues$smallSubPlot <- l1_subGraph
-
-			updateProgress(detail=paste0("Top: ",input$l2_val), value=2/3)
-			l2_subGraph <- get_sub_graph(localIGraph, l2_candidates, vertex_level=1, shortest_paths=TRUE)
-			myValues$mediumSubPlot <- l2_subGraph
-
-			updateProgress(detail=paste0("Top: ",input$l3_val), value=3/3)
-			l3_subGraph <- get_sub_graph(localIGraph, l3_candidates, vertex_level=1, shortest_paths=TRUE)
-			myValues$largeSubPlot <- l3_subGraph
-
-			l1_genelist <- get.vertex.attribute(l1_subGraph, "name")
-			l2_genelist <- get.vertex.attribute(l2_subGraph, "name")
-			l3_genelist <- get.vertex.attribute(l3_subGraph, "name")
-
-			print("subgraph1:")
-			print(l1_genelist)
-			print("subgraph2:")
-			print(l2_genelist)
-			print("subgraph3:")
-			print(l3_genelist)
-
-			localSubGraphGeneLists <- list(l1_genelist, l2_genelist, l3_genelist)
-			myValues$mList <- localSubGraphGeneLists
-
-			#rOrgDB <- unlist(strsplit(input$organism, ";"))[2]
 			rOrgDB <- unlist(strsplit(input$organism, ";"))[1]
-			progress$set(message="Getting Enriched Annotation...", value=0)
-			updateProgress(detail=paste0("Top: ",input$l1_val), value=1/3)
-			l1_enrichmentDF <- annotation_enrichment(l1_genelist, annDB=rOrgDB)
-			updateProgress(detail=paste0("Top: ",input$l2_val), value=2/3)
-			l2_enrichmentDF <- annotation_enrichment(l2_genelist, annDB=rOrgDB)
-			updateProgress(detail=paste0("Top: ",input$l3_val), value=3/3)
-			l3_enrichmentDF <- annotation_enrichment(l3_genelist, annDB=rOrgDB)
+                        modMethod <- input$modMethod
+			minModSize <- input$minModSize
 
-			progress$set(message="Getting Progressive Enrichment...", value=0)
-			updateProgress(detail="Processing: ", value=0.5)
-			localEnrichmentDF <- progressive_enrichment(localSubGraphGeneLists, l1_enrichmentDF, l2_enrichmentDF, l3_enrichmentDF)
-			myValues$enrichmentDF <- localEnrichmentDF
-			updateProgress(detail="Obtained: ", value=1)
+                        modules <- get_modules(iGraph=localIGraph, method=modMethod)
+			modulesCount <- sum(sizes(modules)>=minModSize)
+			modPalette <- setNames(randomcoloR::distinctColorPalette(modulesCount), paste0(modMethod, "_", c(1:modulesCount)))
+			members <- membership(modules)
 
-			progress$set(message="Creating Tile Plots...", value=0)
-			sim_cutoff=0.4
+			#modMembers <- NULL
+			idx <- which(table(members)<minModSize)
+			if(length(idx)>0){
+				orphanIdx <- names(idx)
+				j <- 1
+				for(i in 1:c(length(modules))){
+					#i <- as.character(i)
+					if(i %in% orphanIdx){
+						#tmpVecNames <- names(which(members %in% i))
+						#tmpVec <- setNames("orphan", tmpVecNames)
+						#modMembers <- c(modMembers, tmpVec)
+						members[which(members %in% i)] <- "orphan"
+					}else{
+						#tmpVecNames <- names(which(members %in% i))
+						#tmpVec <- setNames(paste0(modMethod, "_", j), tmpVecNames)
+						#modMembers <- c(modMembers, tmpVec)
+						members[which(members %in% i)] <- paste0(modMethod, "_", j)
+						j <- j+1
+					}
+				}
+			}else{
+				members <- setNames(paste0(modMethod, "_", members), names(members))
+			}
+			print("modMems:")
+			print(members)
+			igraph::vertex_attr(localIGraph, name="group") <- members[V(localIGraph)$name]
 
-			updateProgress(detail="Clustering GO Terms", value=1/3)
-                        GO_clust_summ_list <- go_summarization(localEnrichmentDF, annDB=rOrgDB)
-                        myValues$GO_clust_summ_list <- GO_clust_summ_list
+			updateProgress(detail="Annotating Modules...", value=2/4)
+			modules_ll <- annotate_modules(iGraph=localIGraph, modules=modules, rl=localRankedGenes, rl.c=localRankedGenes.c, rl.pv=localRankedGenes.pv, rl.lfc=localRankedGenes.lfc, rl.edge=edgeRank, annDB=rOrgDB, min_mod_size=minModSize, prefix=modMethod)
+
+			updateProgress(detail="Generating Module Score Table...", value=3/4)
+			#Create IC list for semsim
+			IC_ll <- sapply(c("BP", "CC", "MF"), function(typ) godata(rOrgDB, ont=typ, computeIC=TRUE))
+			#modules_rank_table <- as.rank.table(iGraph=localIGraph, annotated_modules_ll=modules_ll, IC_ll=IC_ll)
+			modules_rank_table <- as.rank.table(iGraph=localIGraph, annotated_modules_ll=modules_ll) ##Not computing GO sim
+
+			updateProgress(detail="Computing Module Similarity by GO...", value=4/4)
+			within_go_sim <- get_between_GO_sim(modules_ll, modules_ll, IC_ll=IC_ll)
+			#simHeatMap <- plot_sim_heatmap(hSim=within_go_sim, rSim=within_go_sim, cSim=within_go_sim)
+
 			updateProgress(detail="Finishing: ", value=3/3)
 
+                        myValues$iGraph <- localIGraph
 			myValues$gxCorMat <- localGxCorMat
+			myValues$rankMat <- rankMat
+			myValues$rl <- localRankedGenes
+			myValues$rl.c <- localRankedGenes.c
+			myValues$rl.pv <- localRankedGenes.pv
+			myValues$rl.lfc <- localRankedGenes.lfc
+			myValues$edgeRank <- edgeRank
+			myValues$modules <- modules
+			myValues$modules_ll <- modules_ll
+			myValues$modules_rank_table <- modules_rank_table
+			myValues$modPalette <- modPalette
+			myValues$IC_ll <- IC_ll
+			#myValues$simHeatMap <- simHeatMap
+			myValues$within_go_sim <- within_go_sim
+                        myValues$modMethodVal <- modMethod
+			myValues$minModSizeVal <- minModSize
                 })
 
-		shiny::observeEvent(input$calcMat, {
-			cat("INSIDE OBSERVE EVENT.....")
-			shiny::updateTabsetPanel(session, "display", selected="corMat_display")
-		})
+		observeEvent(input$runDetect, {
+			print("Run Module Detection.....")
+
+                        if(any(
+                                is.null(myValues$gxTable()), 
+                                is.null(myValues$dgxLoaded), 
+                                is.null(myValues$method()), 
+                                is.null(myValues$est()), 
+                                is.null(myValues$disc())
+                        ))
+                        return(NULL)
+
+			print("Passed Validations.....")
+
+                        progress <- shiny::Progress$new()
+			updateProgress <- function(value=NULL, detail=NULL){
+				if (is.null(value)) {
+					value <- progress$getValue()
+					value <- value + (progress$getMax() - value) / 5
+				}
+				progress$set(value = value, detail = detail)
+			}
+                        on.exit({
+				progress$close()
+				shiny::updateTabsetPanel(session, "display", selected="corMat_display")
+			})
+
+			progress$set(message="Module Detection", value=0)
+			updateProgress(detail="Getting Modules...", value=1/4)
+
+                        localIGraph <- myValues$iGraph
+			localRankedGenes <- myValues$rl
+			localRankedGenes.c <- myValues$rl.c
+			localRankedGenes.pv <- myValues$rl.pv
+			localRankedGenes.lfc <- myValues$rl.lfc
+			edgeRank <- myValues$edgeRank
+			rOrgDB <- unlist(strsplit(input$organism, ";"))[1]
+                        modMethod <- input$modMethod
+			minModSize <- input$minModSize
+
+                        modules <- get_modules(iGraph=localIGraph, method=modMethod)
+			modulesCount <- sum(sizes(modules)>=minModSize)
+			modPalette <- setNames(randomcoloR::distinctColorPalette(modulesCount), paste0(modMethod, "_", c(1:modulesCount)))
+			members <- membership(modules)
+
+			idx <- which(table(members)<minModSize)
+			if(length(idx)>0){
+				orphanIdx <- names(idx)
+				j <- 1
+				for(i in 1:c(length(modules))){
+					if(i %in% orphanIdx){
+						members[which(members %in% i)] <- "orphan"
+					}else{
+						members[which(members %in% i)] <- paste0(modMethod, "_", j)
+						j <- j+1
+					}
+				}
+			}else{
+				members <- setNames(paste0(modMethod, "_", members), names(members))
+			}
+			print("modMems:")
+			print(members)
+			igraph::vertex_attr(localIGraph, name="group") <- members[V(localIGraph)$name]
+
+			updateProgress(detail="Annotating Modules...", value=2/4)
+			modules_ll <- annotate_modules(iGraph=localIGraph, modules=modules, rl=localRankedGenes, rl.c=localRankedGenes.c, rl.pv=localRankedGenes.pv, rl.lfc=localRankedGenes.lfc, rl.edge=edgeRank, annDB=rOrgDB, min_mod_size=minModSize, prefix=modMethod)
+
+			updateProgress(detail="Generating Module Score Table...", value=3/4)
+			#Create IC list for semsim
+			IC_ll <- sapply(c("BP", "CC", "MF"), function(typ) godata(rOrgDB, ont=typ, computeIC=TRUE))
+			#modules_rank_table <- as.rank.table(iGraph=localIGraph, annotated_modules_ll=modules_ll, IC_ll=IC_ll)
+			modules_rank_table <- as.rank.table(iGraph=localIGraph, annotated_modules_ll=modules_ll) ##Not computing GO sim
+
+			updateProgress(detail="Computing Module Similarity by GO...", value=4/4)
+			within_go_sim <- get_between_GO_sim(modules_ll, modules_ll, IC_ll=IC_ll)
+			#simHeatMap <- plot_sim_heatmap(hSim=within_go_sim, rSim=within_go_sim, cSim=within_go_sim)
+
+			updateProgress(detail="Finishing: ", value=3/3)
+
+                        print("Updating Select Input Varaibles#########")
+                        tmpChoices <- names(modules_ll[["ig"]])
+                        print(tmpChoices)
+                        updateSelectInput(session, "optMod", choices=tmpChoices, selected="")
+                        updateSelectInput(session, "conMod", choices=tmpChoices, selected="")
+                        updateSelectInput(session, "indMod", choices=tmpChoices, selected="")
+                        modsOptCon <- unique(c(input$optMod, input$conMod))
+                        modsOptInd <- unique(c(input$optMod, input$indMod))
+                        modsConInd <- unique(c(input$conMod, input$indMod))
+                        print(modsOptCon)
+                        print(modsOptInd)
+                        print(modsConInd)
+			myValues$modules <- modules
+			myValues$modules_ll <- modules_ll
+			myValues$modules_rank_table <- modules_rank_table
+			myValues$modPalette <- modPalette
+			myValues$IC_ll <- IC_ll
+			myValues$within_go_sim <- within_go_sim
+                        myValues$modMethodVal <- modMethod
+			myValues$minModSizeVal <- minModSize
+                })
 
 		output$totalGeneBox <- shinydashboard::renderValueBox({
 			if(is.null(myValues$gxCorMat)){
@@ -360,10 +646,12 @@ shinyServer(
 
 		output$downloadMat <- shiny::downloadHandler(
 			filename = function(){
-                                paste("Adjacency_Matrix_", Sys.Date(), '.txt', sep='')
+                                #paste("Adjacency_Matrix_", Sys.Date(), '.txt', sep='')
+                                paste("Edge_Rank_Matrix_", Sys.Date(), '.txt', sep='')
                         },
 			content = function(con){
-				write.table(myValues$gxCorMat, con, row.names=TRUE, col.names=TRUE, quote=FALSE, sep="\t")
+				#write.table(myValues$gxCorMat, con, row.names=TRUE, col.names=TRUE, quote=FALSE, sep="\t")
+				write.table(myValues$rankMat, con, row.names=TRUE, col.names=TRUE, quote=FALSE, sep="\t")
 			}
 		)
 
@@ -403,8 +691,14 @@ shinyServer(
 				    shinyjs::enable("downloadUnGenes")
 				}
 			}
-		})
 
+			if(!is.null(input$sepS) && input$sepS=="OTHER"){
+				shinyjs::enable("sepT")
+			}else{
+				shinyjs::disable("sepT")
+			}
+		})
+		
                 myValues$iGraph_dynamic <- shiny::reactive({
                         shiny::validate(
 				need(!is.null(myValues$iGraph), "No Graph to Plot!")
@@ -425,7 +719,8 @@ shinyServer(
 			progress$set(message="Formatting Graph", value=0)
 
 			localGxTable <- myValues$gxTable()
-			localDgxTable <- myValues$dgxTable()
+			#localDgxTable <- myValues$dgxTable()
+			localDgxTable <- myValues$dgxTable
                         localIGraph <- myValues$iGraph
                         localRankedGenes <- myValues$rankedGenes
 
@@ -452,7 +747,23 @@ shinyServer(
 			#	print(dim(localDgxTable))
 			#}
 
-                        if(input$vColType=="score"){
+                        if(input$chkGrpCol==TRUE){
+                                modPalette <- myValues$modPalette
+                                modVec <- igraph::vertex_attr(localIGraph, name="group")
+				print("modVec")
+				print(modVec)
+                                mods <- unique(modVec)
+                                for(mod in mods){
+					if(mod == "orphan")
+					next
+
+                                        idx <- which(modVec %in% mod)
+					if(length(idx)>0){
+						igraph::vertex_attr(localIGraph, name="color")[idx] <- modPalette[mod]
+					}
+                                }
+                        }else if(input$vColType=="score"){
+                        #if(input$vColType=="score"){
                                 localIGraph <- set_vertex_color(localIGraph, localGxTable, localDgxTable, pos_cor_color=input$vColP, pos_cor_highlight_color=input$vhColP, neg_cor_color=input$vColN, neg_cor_highlight_color=input$vhColN, pos_perc=as.numeric(input$posPerc), neg_perc=as.numeric(input$negPerc))
                         }else if(input$vColType=="rank"){
                                 rbPal <- colorRampPalette(c(input$vColT,input$vColB))
@@ -467,7 +778,7 @@ shinyServer(
                 output$IGraphVis <- visNetwork::renderVisNetwork({
                         shiny::validate(
                                 #need(!is.null(myValues$iGraph), "No graph to plot!")
-                                need(!is.null(myValues$iGraph_dynamic), "Waiting for updated graph...")
+                                need(!is.null(myValues$iGraph_dynamic()), "Waiting for updated graph...")
                         )
 
 			progress <- shiny::Progress$new()
@@ -486,8 +797,64 @@ shinyServer(
 
                         #mainVisNetwork <-  get_visNetwork(localIGraph, plot_layout=input$graphLayout, vBorderColor=input$vBrdCol, vShape=input$vShape, vFontColor=input$vLblCol, vSize=input$vSize, eWidth=input$eWidth, vColTop=input$vColT, vColBottom=input$vColB, vColType=input$vColType)
                         mainVisNetwork <-  get_visNetwork(localIGraph, plot_layout=input$graphLayout, vBorderColor=input$vBrdCol, vShape=input$vShape, vFontColor=input$vLblCol, vSize=input$vSize, eWidth=input$eWidth, degDepth=input$dDepth)
+
+                        if(input$chkGrpCol==TRUE){
+                                modPalette <- myValues$modPalette
+                                print("str(modPalette):")
+                                print(str(modPalette))
+                                #modVec <- igraph::vertex_attr(localIGraph, name="group")
+                                #mods <- unique(modVec)
+                                addNodes <- data.frame(label=names(modPalette), shape="circle", icon.color=modPalette)
+                                print("addNodes:")
+                                print(addNodes)
+                                mainVisNetwork <- mainVisNetwork %>%
+                                visLegend(addNodes=addNodes, useGroups=FALSE, main="Modules")
+                        }
+
+			#Add export control
+			networkImageExportFileName <- paste0("network_", Sys.Date())
+			imageType <- "png"
+                        bgColor <- input$bgCol
+			mainVisNetwork <- mainVisNetwork %>%
+			visExport(type=imageType, name=networkImageExportFileName, label=paste0("Export as ", imageType), background=bgColor, float="right", style=NULL, loadDependencies=TRUE)
+			
                         mainVisNetwork
                 })
+
+                #observeEvent(input$chkGrpCol, {
+		#	#Color Groups 
+		#	chkGrpCol <- input$chkGrpCol
+		#	isolate({
+		#		if(chkGrpCol==TRUE){
+		#			modPalette <- myValues$modPalette
+                #                        modVec <- igraph::vertex_attr(localIGraph, name="group")
+                #                        mods <- unique(modVec)
+                #                        addNodes <- data.frame(label=mods, shape="circle", icon.color=modPalette[mods])
+                #                        for(mod in mods){
+                #                                visNetworkProxy("IGraphVis") %>%
+                #                                visGroups(groupname=mod, color=modPalette[mod])
+                #                        }
+		#		}
+                #                visNetworkProxy("IGraphVis") %>%
+                #                visLegend()
+		#	})
+		#})
+
+		observeEvent(input$focusMod, {
+			#Focus on 
+			gr <- input$focusMod
+			isolate({
+				if(gr != "ALL"){
+					ig <- myValues$iGraph_dynamic()
+					nodeDF <- as_data_frame(ig, what="vertices")
+					names <- nodeDF$name[nodeDF$group %in% gr]
+				}else{
+					names <- NULL
+				}
+				visNetworkProxy("IGraphVis") %>%
+				visFit(nodes=names, animation=list(duration=200, easingFunction="easeInOutQuad"))
+			})
+		})
 
 		output$downloadGraph <- shiny::downloadHandler(
 			filename = function(){
@@ -509,238 +876,388 @@ shinyServer(
 
 		output$downloadGO <- shiny::downloadHandler(
 			filename = function(){
-				paste("enriched_GO_", Sys.Date(), '.txt', sep='')
+				paste("enriched_GO_", Sys.Date(), '.xlsx', sep='')
 			},
 			content = function(con){
-				write.table(myValues$enrichmentDF, con, quote=FALSE, sep="\t", row.names=FALSE, col.names=TRUE)
+                                modules_ll <- myValues$modules_ll
+                                ae_list <- modules_ll[["ae"]]
+                                idx <- which(unlist(lapply(ae_list, is.null), use.names=F))
+                                if(length(idx)>0){
+                                            ae_list <- ae_list[-idx]
+                                }
+                                #names(ae_list) <- paste0("mod_", names(ae_list))
+                                WriteXLS(ae_list, ExcelFileName=con, col.names=T, AdjWidth=T, BoldHeaderRow=T)
 			}
 		)
 
 		output$enrichmentDT <- DT::renderDataTable({
 			shiny::validate(
-                                need(!is.null(myValues$enrichmentDF), "Waiting for annotation enrichment results...")
+                                need(!is.null(myValues$modules_ll), "Waiting for module detection...")
+                        )
+                        shiny::validate(
+                                need(!is.null(input$modEnrich), "Waiting for module detection...")
+                        )
+                        shiny::validate(
+                                need(!is.na(input$modEnrich), "Waiting for module detection...")
                         )
 
-			print("In Enrichment Data Frame, renderDataTable!")
-			DT::datatable(myValues$enrichmentDF, filter = list(position='top', clear=FALSE), options = list(search = list(regex=TRUE, caseInsensitive=FALSE), scrollX=TRUE))
+                        mod <- input$modEnrich
+			modules_ll <- myValues$modules_ll
+                        enrichmentDF <- modules_ll[["ae"]][[mod]]
+
+			DT::datatable(enrichmentDF, filter = list(position='top', clear=FALSE), options = list(search = list(regex=TRUE, caseInsensitive=FALSE), scrollX=TRUE))
 		})
+
+		###Module Network
+                myValues$mod_dynamic <- shiny::reactive({
+                        #shiny::validate(
+			#	need(!is.null(myValues$iGraph), "No Graph to Plot!")
+			#)
+			if(is.null(myValues$iGraph))
+			return(NULL)
+
+                        progress <- shiny::Progress$new()
+                        on.exit(progress$close())
+
+			progress$set(message="Formatting Modules Graph...", value=0)
+			mods <- input$mod
+
+			if(is.null(mods))
+			return(NULL)
+
+                        if(length(mods)>1){
+                                localIGraph <- igraph:::union.igraph(myValues$modules_ll[["ig"]][mods])
+                                vAttrNames <- list.vertex.attributes(myValues$modules_ll[["ig"]][[1]])[-1]
+                                eAttrNames <- list.edge.attributes(myValues$modules_ll[["ig"]][[1]])
+                                localIGraph <- resolve_ig_union_attrs(localIGraph, vAttrNames, eAttrNames)
+                        }else{
+                                localIGraph <- myValues$modules_ll[["ig"]][[mods[1]]]
+                        }
+                        modPalette <- myValues$modPalette
+                        modVec <- igraph::vertex_attr(localIGraph, name="group")
+                        #mods <- unique(modVec)
+                        for(mod in mods){
+                                idx <- which(modVec %in% mod)
+                                igraph::vertex_attr(localIGraph, name="color")[idx] <- modPalette[mod]
+                        }
+                        localIGraph
+                })
+
+                output$modVis <- visNetwork::renderVisNetwork({
+                        shiny::validate(
+                                #need(!is.null(myValues$iGraph_dynamic()), "Waiting for formatted graph...")
+                                need(!is.null(myValues$mod_dynamic()), "Waiting for formatted graph...")
+                        )
+
+                        progress <- shiny::Progress$new()
+                        on.exit(progress$close())
+			
+                        #progress$set(message="Extracting Mod", value=0)
+			#mods <- input$mod
+                        #print("class(mods) : ")
+                        #print(class(mods))
+                        ##localIGraph <- myValues$modules_ll[["ig"]][input$mod]
+                        #if(length(mods)>1){
+                        #        localIGraph <- igraph:::union.igraph(myValues$modules_ll[["ig"]][mods])
+                        #        vAttrNames <- list.vertex.attributes(myValues$modules_ll[["ig"]][[1]])[-1]
+                        #        eAttrNames <- list.edge.attributes(myValues$modules_ll[["ig"]][[1]])
+                        #        print("localIGraph : ")
+                        #        print(vcount(localIGraph))
+                        #        print(ecount(localIGraph))
+                        #        print(list.vertex.attributes(localIGraph))
+                        #        print(list.edge.attributes(localIGraph))
+                        #        localIGraph <- resolve_ig_union_attrs(localIGraph, vAttrNames, eAttrNames)
+                        #}else{
+                        #        print(V(myValues$modules_ll[["ig"]][[mods[1]]]))
+                        #        localIGraph <- myValues$modules_ll[["ig"]][[mods[1]]]
+                        #}
+
+                        #modPalette <- myValues$modPalette
+                        #print("str(modPalette):")
+                        #print(str(modPalette))
+                        #modVec <- igraph::vertex_attr(localIGraph, name="group")
+                        #mods <- unique(modVec)
+                        #for(mod in mods){
+                        #        idx <- which(modVec %in% mod)
+                        #        igraph::vertex_attr(localIGraph, name="color")[idx] <- modPalette[mod]
+                        #}
+
+			progress$set(message="Plotting", value=0)
+
+                        localIGraph <- myValues$mod_dynamic()
+                        modVisNetwork <- get_visNetwork(localIGraph, plot_layout=input$graphLayout, vBorderColor=input$vBrdCol, vShape=input$vShape, vFontColor=input$vLblCol, vSize=input$vSize, eWidth=input$eWidth, degDepth=input$dDepth)
+
+			networkImageExportFileName <- paste0(paste(input$mod, collapse="-"), "_", Sys.Date())
+			imageType <- "png"
+                        bgColor <- input$bgCol
+                        modPalette <- myValues$modPalette
+			mods <- input$mod
+                        addNodes <- data.frame(label=mods, shape="circle", icon.color=modPalette[mods])
+                        print("addNodes:")
+                        print(addNodes)
+			modVisNetwork <- modVisNetwork %>%
+			visLegend(addNodes=addNodes, useGroups=FALSE, main="Modules") %>%
+			#Add export control
+			visExport(type=imageType, name=networkImageExportFileName, label=paste0("Export as ", imageType), background=bgColor, float="right", style=NULL, loadDependencies=TRUE)
+
+                        modVisNetwork
+                })
+
+                output$downloadMod <- shiny::downloadHandler(
+                        filename = function(){
+                                #paste0(input$mod, "_", Sys.Date(), '.', input$modExportFormat)
+                                paste0(paste(input$mod, collapse="-"), "_", Sys.Date(), '.', input$modExportFormat)
+                        },
+                        content = function(con){
+                                #write.graph(myValues$modules_ll[["ig"]][input$mod], con, format=input$modExportFormat)
+                                write.graph(myValues$mod_dynamic(), con, format=input$modExportFormat)
+                        }
+                )
+
+                output$downloadModGenes <- shiny::downloadHandler(
+                        filename = function(){
+                                #paste0(input$mod, "_genes_", Sys.Date(), '.txt')
+                                paste0(paste(input$mod, collapse="-"), "_genes_", Sys.Date(), '.txt')
+                        },
+                        content = function(con){
+                                #write.table(V(myValues$modules_ll[["ig"]][input$mod])$name, con, quote=FALSE, sep="\t", row.names=FALSE, col.names=FALSE)
+                                write.table(V(myValues$mod_dynamic())$name, con, quote=FALSE, sep="\t", row.names=FALSE, col.names=FALSE)
+                        }
+                )
+
+		##Radar Chart
+		output$radarChart <- radarchart::renderChartJSRadar({
+                        shiny::validate(
+                                need(!is.null(myValues$modules_rank_table), "Waiting for module detection...")
+                        )
+			rank_table <- myValues$modules_rank_table
+			radarchart::chartJSRadar(scores=rank_table[,c(-1)], labs=rownames(rank_table))
+		})
+
+                ##Module Optimization Radar Chart
+                observeEvent(input$rChartButton, {
+                        if(is.null(myValues$modules_ll))
+                        return(NULL)
+
+			progress <- shiny::Progress$new()
+			updateProgress <- function(value=NULL, detail=NULL){
+				if (is.null(value)) {
+					value <- progress$getValue()
+					value <- value + (progress$getMax() - value) / 5
+				}
+				progress$set(value = value, detail = detail)
+			}
+                        on.exit(progress$close())
+
+			progress$set(message="Response Module Optimization", value=0)
+			updateProgress(detail="Reorganizing Modules...", value=1/4)
+
+                        optMods <- input$optMod
+                        conMods <- input$conMod
+                        indMods <- input$indMod
+                        localIGraph <- myValues$iGraph
+			gene_ll <- myValues$modules_ll[["names"]]
+			ae_ll <- myValues$modules_ll[["ae"]]
+			rl <- myValues$rl
+			rl.c <- myValues$rl.c
+			rl.pv <- myValues$rl.pv
+			rl.lfc <- myValues$rl.lfc
+			edgeRank <- myValues$edgeRank
+			rOrgDB <- unlist(strsplit(input$organism, ";"))[1]
+			IC_ll <- myValues$IC_ll
+                        
+                        if(is.null(optMods) && is.null(conMods) && is.null(indMods))
+                        return(NULL)
+
+                        morphed_gene_ll <- list()
+                        morphed_ae_ll <- list()
+                        if(!is.null(optMods)){
+                                idx <- which(names(gene_ll) %in% optMods)
+                                morphed_gene_ll[["chosen"]] <- as.character(unlist(gene_ll[idx]))
+                                optAeDF <- ldply(ae_ll[idx], data.frame)
+                                #idx <- which(duplicated(optAeDF$GOID))
+                                #if(length(idx)>1){
+                                #        optAeDF <- optAeDF[-idx,]
+                                #}
+                                optAeDF <- optAeDF[,-1]
+                                optAeDF <- transform(optAeDF, Score=(-log10(optAeDF$EASE_Score))*optAeDF$Gene_Count)
+                                resDF <- plyr::ddply(optAeDF, plyr::.(GOID), plyr::summarize, sum(Score))
+                                optAeDF <- plyr::join(resDF, optAeDF, by="GOID", type="left", match="first")
+                                morphed_ae_ll[["chosen"]] <- optAeDF
+                        }
+                        if(!is.null(conMods)){
+                                idx <- which(names(gene_ll) %in% conMods)
+                                morphed_gene_ll[["contrast"]] <- as.character(unlist(gene_ll[idx]))
+
+                                conAeDF <- ldply(ae_ll[idx], data.frame)
+                                #idx <- which(duplicated(conAeDF$GOID))
+                                #if(length(idx)>1){
+                                #        conAeDF <- conAeDF[-idx,]
+                                #}
+                                conAeDF <- conAeDF[,-1]
+                                conAeDF <- transform(conAeDF, Score=(-log10(conAeDF$EASE_Score))*conAeDF$Gene_Count)
+                                resDF <- plyr::ddply(conAeDF, plyr::.(GOID), plyr::summarize, sum(Score))
+                                conAeDF <- plyr::join(resDF, conAeDF, by="GOID", type="left", match="first")
+                                morphed_ae_ll[["contrast"]] <- conAeDF
+                        }
+                        if(!is.null(indMods)){
+                                idx <- which(names(gene_ll) %in% indMods)
+                                if(length(idx)>0){
+                                        morphed_gene_ll <- c(morphed_gene_ll, gene_ll[idx])
+                                        morphed_ae_ll <- c(morphed_ae_ll, ae_ll[idx])
+                                }
+                        }
+
+			updateProgress(detail="Getting New Ranks...", value=2/4)
+                        #rank_table <- get_rank_table(iGraph=localIGraph, gene_ll=morphed_gene_ll, ae_ll=morphed_ae_ll,  rl=rl, rl.c=rl.c, rl.pv=rl.pv, rl.lfc=rl.lfc, rl.edge=edgeRank, annDB=rOrgDB, IC_ll=IC_ll)
+                        rank_table <- get_rank_table(iGraph=localIGraph, gene_ll=morphed_gene_ll, ae_ll=morphed_ae_ll,  rl=rl, rl.c=rl.c, rl.pv=rl.pv, rl.lfc=rl.lfc, rl.edge=edgeRank) ##Not computing GO sim
+                        rank_table <- as.data.frame(t(rank_table[,-1]))
+
+			updateProgress(detail="Summarizing Response GOs...", value=3/4)
+			sim_cutoff=0.4
+                        optAE <- morphed_ae_ll[["chosen"]]
+			#GO_clust_summ_list <- go_summarization(optAE, score_col="EASE_Score", annDB=rOrgDB, IC_ll=IC_ll)
+			GO_clust_summ_list <- go_summarization(optAE, score_col="Score", annDB=rOrgDB, IC_ll=IC_ll, log_transform=FALSE)
+
+			updateProgress(detail="Completed", value=4/4)
+
+                        shinyBS::updateButton(session, "rChartButton", style="success", icon=icon("check-circle"))
+			myValues$GO_clust_summ_list <- GO_clust_summ_list
+                        myValues$optAnnotation <- rank_table
+                        myValues$optAE <- optAE
+                        myValues$morphed_gene_ll <- morphed_gene_ll
+                        myValues$morphed_ae_ll <- morphed_ae_ll
+                        myValues$optModVal <- sort(optMods)
+                        myValues$conModVal <- sort(conMods)
+                        myValues$indModVal <- sort(indMods)
+                })
+
+		output$optRadarChart <- radarchart::renderChartJSRadar({
+                        #shiny::validate(
+                        #        need(!is.null(myValues$optAE), "Waiting for module optimization results...")
+                        #)
+                        rank_table <- myValues$optAnnotation
+			radarchart::chartJSRadar(scores=rank_table, labs=rownames(rank_table))
+		})
+
+		output$downloadOptRankDT <- shiny::downloadHandler(
+			filename = function(){
+                                paste("Gene_Tables_Optimized_", Sys.Date(), '.xlsx', sep='')
+			},
+			content = function(con){
+                                localIGraph <- myValues$iGraph
+                                rl <- myValues$rl
+                                modules_ll <- list() 
+                                modules_ll[["names"]] <- myValues$morphed_gene_ll
+                                orgDB <- unlist(strsplit(input$organism, ";"))[1]
+                                masterDF <- myValues$rankDF()
+                                modDF_LL <- get_mod_gene_tables(ig=localIGraph, rankedGenes=rl, modLL=modules_ll, orgDB=orgDB)
+                                outLL <- list(master=masterDF)
+                                outLL <- c(outLL, modDF_LL)
+                                WriteXLS(outLL, ExcelFileName=con, col.names=T, AdjWidth=T, BoldHeaderRow=T)
+			}
+		)
+
+		##Module GO Similarity Heatmap
+		output$simHeatmap <- renderPlot({
+                        shiny::validate(
+                                need(!is.null(myValues$within_go_sim), "Waiting for module detection...")
+                        )
+			#modMethod <- input$modMethod
+			#modules_ll <- myValues$modules_ll
+			#IC_ll <- myValues$IC_ll
+			#within_go_sim <- get_between_GO_sim(modules_ll, modules_ll, prefix1=modMethod, prefix2=modMethod, IC_ll=IC_ll)
+			within_go_sim <- myValues$within_go_sim
+			simHeatMap <- plot_sim_heatmap(hSim=within_go_sim, rSim=within_go_sim, cSim=within_go_sim)
+			simHeatMap <- myValues$simHeatMap
+			simHeatMap
+		})
+
+		output$downloadSimMat <- shiny::downloadHandler(
+			filename = function(){
+                                paste0("Modules_Similarity_by_GO_", Sys.Date(), '.txt')
+			},
+			content = function(con){
+				within_go_sim <- myValues$within_go_sim
+				write.table(within_go_sim, con, row.names=TRUE, col.names=TRUE, quote=FALSE, sep="\t")
+			}
+		)
 
 		output$tilePlotBP <- shiny::renderPlot({
 			shiny::validate(
-                                need(!is.null(myValues$enrichmentDF), "Waiting for annotation enrichment results...")
-                        )
+				need(!is.null(myValues$optAE), "Waiting for module optimization results...")
+			)
+			shiny::validate(
+				need(!is.null(myValues$GO_clust_summ_list$BP), "No results to plot for BP!")
+			)
 			print("INSIDE TILE PLOT!")
-
 			plot_treemap(myValues$GO_clust_summ_list$BP, ont="BP")
 		})
 
 		output$tilePlotCC <- shiny::renderPlot({
 			shiny::validate(
-                                need(!is.null(myValues$enrichmentDF), "Waiting for annotation enrichment results...")
-                        )
+				need(!is.null(myValues$optAE), "Waiting for module optimization results...")
+			)
+			shiny::validate(
+				need(!is.null(myValues$GO_clust_summ_list$CC), "No results to plot for CC!")
+			)
 			print("INSIDE TILE PLOT!")
-
 			plot_treemap(myValues$GO_clust_summ_list$CC, ont="CC")
 		})
 
 		output$tilePlotMF <- shiny::renderPlot({
 			shiny::validate(
-                                need(!is.null(myValues$enrichmentDF), "Waiting for annotation enrichment results...")
-                        )
+				need(!is.null(myValues$optAE), "Waiting for module optimization results...")
+			)
+			shiny::validate(
+				need(!is.null(myValues$GO_clust_summ_list$MF), "No results to plot for MF!")
+			)
 			print("INSIDE TILE PLOT!")
-
 			plot_treemap(myValues$GO_clust_summ_list$MF, ont="MF")
 		})
 
-		###Sub-Networks
-                output$smallSubNetVis <- visNetwork::renderVisNetwork({
-                        shiny::validate(
-                                #need(!is.null(myValues$enrichmentDF), "Waiting for annotation enrichment results...")
-                                need(!is.null(myValues$iGraph_dynamic), "Waiting for formatted graph...")
-                        )
+                output$downloadTilePlot <- shiny::downloadHandler(
+			filename = function(){
+				paste("Tileplot_", Sys.Date(), '.PDF', sep='')
+			},
+			content = function(con){
+                                #Disable Warning
+                                oldw <- getOption("warn")
+                                options(warn = -1)
 
-                        progress <- shiny::Progress$new()
-			updateProgress <- function(value=NULL, detail=NULL){
-				if (is.null(value)) {
-					value <- progress$getValue()
-					value <- value + (progress$getMax() - value) / 5
-				}
-				progress$set(value = value, detail = detail)
+				tempPDF <- file.path(tempdir(), "tileplot.Rmd")
+				file.copy("tileplot.Rmd", tempPDF, overwrite=TRUE)
+
+				params <- list(BP=myValues$GO_clust_summ_list$BP, CC=myValues$GO_clust_summ_list$CC, MF=myValues$GO_clust_summ_list$MF)
+				rmarkdown::render(tempPDF, output_file=con,
+					params=params,
+					envir=new.env(parent=globalenv())
+				)
+
+                                #Enable Warning
+                                options(warn = oldw)
 			}
-                        on.exit(progress$close())
-
-			progress$set(message="Extracting Sub-Graph", value=0)
-
-                        localIGraph <- myValues$iGraph_dynamic()
-
-                        localRankedGenes <- myValues$rankedGenes
-			l1_candidates <- localRankedGenes[c(1:as.integer(input$l1_val))]
-			l1_subGraph <- get_sub_graph(localIGraph, l1_candidates, vertex_level=1, shortest_paths=TRUE)
-                        if(input$vColType=="score"){
-                                l1_subGraph <- highlight_vertices(l1_subGraph, l1_candidates)
-                        }
-
-			progress$set(message="Plotting", value=0)
-
-                        smallVisNetwork <-  get_visNetwork(l1_subGraph, plot_layout=input$graphLayout, vBorderColor=input$vBrdCol, vShape=input$vShape, vFontColor=input$vLblCol, vSize=input$vSize, eWidth=input$eWidth, degDepth=input$dDepth)
-                        smallVisNetwork
-                })
-
-                output$downloadSmallSubNet <- shiny::downloadHandler(
-                        filename = function(){
-                                paste("top", input$l1_val, "_subNet_", Sys.Date(), '.', input$smallSubNetExportFormat, sep='')
-                        },
-                        content = function(con){
-                                write.graph(myValues$smallSubPlot, con, format=input$smallSubNetExportFormat)
-                        }
-                )
-
-                output$downloadSmallSubNetGenes <- shiny::downloadHandler(
-                        filename = function(){
-                                paste("top", input$l1_val, "_subNet_genes_", Sys.Date(), '.txt', sep='')
-                        },
-                        content = function(con){
-                                write.table(V(myValues$smallSubPlot)$name, con, quote=FALSE, sep="\t", row.names=FALSE, col.names=FALSE)
-                        }
-                )
-
-                output$mediumSubNetVis <- visNetwork::renderVisNetwork({
-                        shiny::validate(
-                                #need(!is.null(myValues$enrichmentDF), "Waiting for annotation enrichment results...")
-                                need(!is.null(myValues$iGraph_dynamic), "Waiting for formatted graph...")
-                        )
-
-                        progress <- shiny::Progress$new()
-			updateProgress <- function(value=NULL, detail=NULL){
-				if (is.null(value)) {
-					value <- progress$getValue()
-					value <- value + (progress$getMax() - value) / 5
-				}
-				progress$set(value = value, detail = detail)
-			}
-                        on.exit(progress$close())
-
-			progress$set(message="Extracting Sub-Graph", value=0)
-
-                        localIGraph <- myValues$iGraph_dynamic()
-
-                        localRankedGenes <- myValues$rankedGenes
-			l2_candidates <- localRankedGenes[c(1:as.integer(input$l2_val))]
-			l2_subGraph <- get_sub_graph(localIGraph, l2_candidates, vertex_level=1, shortest_paths=TRUE)
-                        if(input$vColType=="score"){
-                                l2_subGraph <- highlight_vertices(l2_subGraph, l2_candidates)
-                        }
-
-			progress$set(message="Plotting", value=0)
-
-                        mediumVisNetwork <-  get_visNetwork(l2_subGraph, plot_layout=input$graphLayout, vBorderColor=input$vBrdCol, vShape=input$vShape, vFontColor=input$vLblCol, vSize=input$vSize, eWidth=input$eWidth, degDepth=input$dDepth)
-                        mediumVisNetwork
-                })
-
-                output$downloadMediumSubNet <- shiny::downloadHandler(
-                        filename = function(){
-                                paste("top", input$l2_val, "_subNet_", Sys.Date(), '.', input$mediumSubNetExportFormat, sep='')
-                        },
-                        content = function(con){
-                                write.graph(myValues$mediumSubPlot, con, format=input$mediumSubNetExportFormat)
-                        }
-                )
-
-                output$downloadMediumSubNetGenes <- shiny::downloadHandler(
-                        filename = function(){
-                                paste("top", input$l2_val, "_subNet_genes_", Sys.Date(), '.txt', sep='')
-                        },
-                        content = function(con){
-                                write.table(V(myValues$mediumSubPlot)$name, con, quote=FALSE, sep="\t", row.names=FALSE, col.names=FALSE)
-                        }
-                )
-
-                output$largeSubNetVis <- visNetwork::renderVisNetwork({
-                        shiny::validate(
-                                #need(!is.null(myValues$enrichmentDF), "Waiting for annotation enrichment results...")
-                                need(!is.null(myValues$iGraph_dynamic), "Waiting for formatted graph...")
-                        ) 
-
-                        progress <- shiny::Progress$new()
-			updateProgress <- function(value=NULL, detail=NULL){
-				if (is.null(value)) {
-					value <- progress$getValue()
-					value <- value + (progress$getMax() - value) / 5
-				}
-				progress$set(value = value, detail = detail)
-			}
-                        on.exit(progress$close())
-
-			progress$set(message="Extracting Sub-Graph", value=0)
-
-                        localIGraph <- myValues$iGraph_dynamic()
-
-                        localRankedGenes <- myValues$rankedGenes
-			l3_candidates <- localRankedGenes[c(1:as.integer(input$l3_val))]
-			l3_subGraph <- get_sub_graph(localIGraph, l3_candidates, vertex_level=1, shortest_paths=TRUE)
-                        if(input$vColType=="score"){
-                                l3_subGraph <- highlight_vertices(l3_subGraph, l3_candidates)
-                        }
-
-			progress$set(message="Plotting", value=0)
-
-                        largeVisNetwork <-  get_visNetwork(l3_subGraph, plot_layout=input$graphLayout, vBorderColor=input$vBrdCol, vShape=input$vShape, vFontColor=input$vLblCol, vSize=input$vSize, eWidth=input$eWidth, degDepth=input$dDepth)
-                        largeVisNetwork
-                })
-
-                output$downloadLargeSubNet <- shiny::downloadHandler(
-                        filename = function(){
-                                paste("top", input$l3_val, "_subNet_", Sys.Date(), '.', input$largeSubNetExportFormat, sep='')
-                        },
-                        content = function(con){
-                                write.graph(myValues$largeSubPlot, con, format=input$largeSubNetExportFormat)
-                        }
-                )
-
-                output$downloadLargeSubNetGenes <- shiny::downloadHandler(
-                        filename = function(){
-                                paste("top", input$l3_val, "_subNet_genes_", Sys.Date(), '.txt', sep='')
-                        },
-                        content = function(con){
-                                write.table(V(myValues$largeSubPlot)$name, con, quote=FALSE, sep="\t", row.names=FALSE, col.names=FALSE)
-                        }
-                )
+		)
 
 		myValues$rankDF <- shiny::reactive({
 			shiny::validate(
-                                need(!is.null(myValues$enrichmentDF), "Waiting for enrichment!")
+                                need(!is.null(myValues$modules_ll), "Waiting for module detection...")
                         )
 
 			progress <- shiny::Progress$new()
 			progress$set(message="Getting Rank Table...", value=0)
 			on.exit(progress$close())
 
+                        localIGraph <- myValues$iGraph
+			rl <- myValues$rl
+			modules_ll <- myValues$modules_ll
 			#orgDB <- unlist(strsplit(input$organism, ";"))[2]
 			orgDB <- unlist(strsplit(input$organism, ";"))[1]
-			orgDB <- get(orgDB)
-			mapped_df <- select(orgDB, keys=myValues$rankedGenes, columns=c("ENSEMBL","ENTREZID","GENENAME"), keytype="SYMBOL")
-			print(dim(mapped_df))
-			print(head(mapped_df))
-			#tmpDF <- cbind(gene_rank=sapply(mapped_df$SYMBOL, function(x) which(myINfORM$info_rank_list %in% x)), mapped_df)
-			#tmpDF <- cbind(GENE_RANK=sapply(mapped_df$SYMBOL, function(x) which(myINfORM$info_rank_list %in% x)), mapped_df)
-			tmpDF <- cbind(GENE_RANK=sapply(mapped_df$SYMBOL, function(x) which(myValues$rankedGenes %in% x)), mapped_df, SCORE=sapply(mapped_df$SYMBOL, function(x) V(myValues$iGraph)$score[which(V(myValues$iGraph)$name %in% x)]))
-			#print(head(as.vector(sapply(mapped_df$SYMBOL, function(x) V(myINfORM$info_igraph)$corscore[which(V(myINfORM$info_igraph)$name %in% x)]))))
-			mapped_df <- tmpDF[order(tmpDF$GENE_RANK),]
-			print("Going to add member information...")
-
-			print(mapped_df[which(mapped_df$SYMBOL %in% myValues$cList[[1]]),])
-			mapped_df$CANDIDATE_GROUP <- "NA"
-			mapped_df$CANDIDATE_GROUP[which(mapped_df$SYMBOL %in% myValues$cList[[3]])] <- input$l3_val
-			mapped_df$CANDIDATE_GROUP[which(mapped_df$SYMBOL %in% myValues$cList[[2]])] <- input$l2_val
-			mapped_df$CANDIDATE_GROUP[which(mapped_df$SYMBOL %in% myValues$cList[[1]])] <- input$l1_val
-
-			mapped_df$MODULE_GROUP <- "NA"
-			mapped_df$MODULE_GROUP[which(mapped_df$SYMBOL %in% myValues$mList[[3]])] <- input$l3_val
-			mapped_df$MODULE_GROUP[which(mapped_df$SYMBOL %in% myValues$mList[[2]])] <- input$l2_val
-			mapped_df$MODULE_GROUP[which(mapped_df$SYMBOL %in% myValues$mList[[1]])] <- input$l1_val
+                        mapped_df <- get_master_gene_table(ig=localIGraph, rankedGenes=rl, modLL=modules_ll, orgDB=orgDB)
 
 			mapped_df
 		})
+
 		output$rankDT <- DT::renderDataTable({
 			shiny::validate(
                                 need(!is.null(myValues$rankDF()), "Waiting for updated Gene List...")
@@ -752,13 +1269,48 @@ shinyServer(
 
 		output$downloadRankDT <- shiny::downloadHandler(
 			filename = function(){
-				paste("Enriched_Gene_Table_", Sys.Date(), '.txt', sep='')
+                                paste("Gene_Tables_", Sys.Date(), '.xlsx', sep='')
 			},
 			content = function(con){
-				write.table(myValues$rankDF(), con, quote=FALSE, row.names=FALSE,  sep="\t")
+                                localIGraph <- myValues$iGraph
+                                rl <- myValues$rl
+                                modules_ll <- myValues$modules_ll
+                                orgDB <- unlist(strsplit(input$organism, ";"))[1]
+                                masterDF <- myValues$rankDF()
+                                modDF_LL <- get_mod_gene_tables(ig=localIGraph, rankedGenes=rl, modLL=modules_ll, orgDB=orgDB)
+                                outLL <- list(master=masterDF)
+                                outLL <- c(outLL, modDF_LL)
+                                WriteXLS(outLL, ExcelFileName=con, col.names=T, AdjWidth=T, BoldHeaderRow=T)
 			}
 		)
 
+                ##RSERVE SESSION
+                observeEvent(input$rserve_submit, {
+                        if(is.null(myValues$modules_ll)){
+                                shinyjs::info("RServe socket daemon not started. \n\nFailed to find detected modules!!!")
+                                return(NULL)
+                        }
+
+                        shinyjs::info("Rserve socket daemon started!!! \n\nKEEP CALM AND USE RSclient IN ANOTHER R SESSION TO ACCESS THE DAEMON.
+                        \n\n --- R CODE ---\n              
+                        c <- RSclient::RSconnect(host = \"localhost\", port = 6311)\n 
+                        RSclient::RSeval(c, \"names(shiny_app_vars)\")\n 
+                        RSclient::RSshutdown(c)\n 
+                        RSclient::RSclose(c)\n 
+                         --- R CODE ---              
+                        ")
+                        #print("Print on deamon start button:")
+                        #print(ls())
+                        #print(environment())
+                        #print("Global environment:")
+                        #print(myValues$envir)
+                        envir <- myValues$envir
+                        set_shiny_vars(shinyVars=myValues, shinyEnv=envir)
+                        #print(ls(envir))
+                        Rserve::run.Rserve()
+                })
+
+		##DYNAMIC UI WIDGETS
 		output$selOrganism <- shiny::renderUI({
 			org_ann_libs <- rownames(installed.packages()[grep(".*\\.eg\\.db", rownames(installed.packages())),])
 			lapply(org_ann_libs, require, character.only = TRUE)
@@ -766,6 +1318,21 @@ shinyServer(
 			shiny::selectInput("organism", "Choose Organism", choices=org_choices, multiple=FALSE, selected="org.Hs.eg.db;Homo sapiens")
 		})
 
+		output$selPvCol <- renderUI({
+			selectInput("pvCol", "P.Value Column", choices=myValues$dgxColChoices())
+		})
+
+		output$selLfcCol <- renderUI({
+			selectInput("lfcCol", "LogFC Column", choices=myValues$dgxColChoices())
+		})
+
+		output$selSep <- renderUI({
+			selectInput("sepS", "Column Seperator", choices=myValues$sepChoices, selected=myValues$sepChoices[1])
+		})
+
+		output$selQuote <- renderUI({
+			selectInput("quote", "Quotes", choices=myValues$quoteChoices, selected=myValues$quoteChoices[1])
+		})
 		output$selMethod <- shiny::renderUI({
 			shiny::selectInput("method", "Select Inference Algorithm", choices=methods, multiple=TRUE, selected=methods)
 		})
@@ -786,7 +1353,235 @@ shinyServer(
 			#rank_attr <- c(net_attr[!net_attr %in% "eccentricity"], "corscore")
 			shiny::selectInput("rankAttr", "Select Attributes for Ranking Candidates", choices=rank_attr, multiple=TRUE, selected=rank_attr)
 		})
-		
+
+		output$selMod <- shiny::renderUI({
+			if(is.null(myValues$modules_ll)){
+				tmpChoices <- NA
+				sel <- NA
+			}else{
+				tmpChoices <- names(myValues$modules_ll[["ig"]])
+				sel <- tmpChoices[1]
+			}
+			shiny::selectInput("mod", "Select Module", choices=tmpChoices, multiple=TRUE, selected=sel)
+		})
+
+                output$selModEnrich <- shiny::renderUI({
+			if(is.null(myValues$modules_ll)){
+				tmpChoices <- NA
+				sel <- NA
+			}else{
+				tmpChoices <- names(myValues$modules_ll[["ig"]])
+				sel <- tmpChoices[1]
+			}
+			shiny::selectInput("modEnrich", "Select Module", choices=tmpChoices, multiple=FALSE, selected=sel)
+		})
+
+		output$selFocusMod <- shiny::renderUI({
+			if(is.null(myValues$modules_ll)){
+				tmpChoices <- NA
+				sel <- NA
+			}else{
+				tmpChoices <- c("ALL", names(myValues$modules_ll[["ig"]]))
+				sel <- tmpChoices[1]
+			}
+			shiny::selectInput("focusMod", "Focus Module", choices=tmpChoices, multiple=FALSE, selected=sel)
+		})
+
+                output$selOptMod <- shiny::renderUI({
+			if(is.null(myValues$modules_ll)){
+				tmpChoices <- NA
+				#sel <- NA
+			}else{
+				#tmpChoices <- c("none", names(myValues$modules_ll[["ig"]]))
+				#sel <- tmpChoices[1]
+				tmpChoices <- names(myValues$modules_ll[["ig"]])
+			}
+			shiny::selectInput("optMod", "Select Modules of Interest", choices=tmpChoices, multiple=TRUE, selected=NULL)
+		})
+
+                output$selConMod <- shiny::renderUI({
+			if(is.null(myValues$modules_ll)){
+				tmpChoices <- NA
+				#sel <- NA
+			}else{
+				#tmpChoices <- c("none", names(myValues$modules_ll[["ig"]]))
+				#sel <- tmpChoices[1]
+				tmpChoices <- names(myValues$modules_ll[["ig"]])
+			}
+			shiny::selectInput("conMod", "Select Modules for Contrast", choices=tmpChoices, multiple=TRUE, selected=NULL)
+		})
+
+                output$selIndMod <- shiny::renderUI({
+			if(is.null(myValues$modules_ll)){
+				tmpChoices <- NA
+				#sel <- NA
+			}else{
+				#tmpChoices <- c("none", names(myValues$modules_ll[["ig"]]))
+				#sel <- tmpChoices[1]
+				tmpChoices <- names(myValues$modules_ll[["ig"]])
+			}
+			shiny::selectInput("indMod", "Select Modules as Independents", choices=tmpChoices, multiple=TRUE, selected=NULL)
+		})
+
+                shiny::observe({
+                        #Update detect module button if options are change sin UI
+                        if(isTRUE(input$modMethod!=myValues$modMethodVal) || isTRUE(input$minModSize!=myValues$minModSizeVali)){
+                                toDetect <- TRUE
+                        }else{
+                                toDetect <- FALSE
+                        }
+                        if(toDetect==TRUE){
+                                shinyBS::updateButton(session, "runDetect", style="danger", icon=icon("exclamation-circle"))
+                        }else{
+                                shinyBS::updateButton(session, "runDetect", style="success", icon=icon("check-circle"))
+                        }
+
+			#Logic for selectInputs in module optimization
+			if(!is.null(myValues$modules_ll)){
+				print("%%% IN OBSERVE GLOBAL %%%") 
+				print("%%% OBSERVE MODS %%%") 
+				tmpChoices <- names(myValues$modules_ll[["ig"]])
+				modsAll <- unique(c(input$optMod, input$conMod, input$indMod))
+                                modChk <- which(modsAll %in% tmpChoices)
+                                #if(length(modChk)>0){
+                                if(length(modChk)==length(modsAll)){
+                                        print(tmpChoices)
+                                        modsOptCon <- unique(c(input$optMod, input$conMod))
+                                        modsOptInd <- unique(c(input$optMod, input$indMod))
+                                        modsConInd <- unique(c(input$conMod, input$indMod))
+                                        print(modsOptCon)
+                                        print(modsOptInd)
+                                        print(modsConInd)
+                                        if(is.null(modsOptCon)){
+                                                tmpChoicesInd <- tmpChoices
+                                        }else{
+                                                idx <- which(tmpChoices %in% modsOptCon)
+                                                if(length(idx)>0){
+                                                        tmpChoicesInd <- tmpChoices[-idx]
+                                                }
+                                        }
+                                        if(is.null(modsOptInd)){
+                                                tmpChoicesCon <- tmpChoices
+                                        }else{
+                                                idx <- which(tmpChoices %in% modsOptInd)
+                                                if(length(idx)>0){
+                                                        tmpChoicesCon <- tmpChoices[-idx]
+                                                }
+                                        }
+                                        if(is.null(modsConInd)){
+                                                tmpChoicesOpt <- tmpChoices
+                                        }else{
+                                                idx <- which(tmpChoices %in% modsConInd)
+                                                if(length(idx)>0){
+                                                        tmpChoicesOpt <- tmpChoices[-idx]
+                                                }
+                                        }
+
+                                        if(!(length(myValues$optChoicesVal)==length(tmpChoicesOpt) && all(myValues$optChoicesVal %in% sort(tmpChoicesOpt)))){
+                                                updateSelectInput(session, "optMod", choices=tmpChoicesOpt, selected=input$optMod)
+                                        }
+                                        if(!(length(myValues$conChoicesVal)==length(tmpChoicesCon) && all(myValues$conChoicesVal %in% sort(tmpChoicesCon)))){
+                                                updateSelectInput(session, "conMod", choices=tmpChoicesCon, selected=input$conMod)
+                                        }
+                                        if(!(length(myValues$indChoicesVal)==length(tmpChoicesInd) && all(myValues$indChoicesVal %in% sort(tmpChoicesInd)))){
+                                                updateSelectInput(session, "indMod", choices=tmpChoicesInd, selected=input$indMod)
+                                        }
+                                        myValues$optChoicesVal <- sort(tmpChoicesOpt)
+                                        myValues$conChoicesVal <- sort(tmpChoicesCon)
+                                        myValues$indChoicesVal <- sort(tmpChoicesInd)
+
+                                        toPlot <- FALSE
+                                        if(!(length(myValues$optModVal)==length(input$optMod) && all(myValues$optModVal %in% sort(input$optMod)))){
+                                                toPlot <- TRUE
+                                        }
+                                        if(!(length(myValues$conModVal)==length(input$conMod) && all(myValues$conModVal %in% sort(input$conMod)))){
+                                                toPlot <- TRUE
+                                        }
+                                        if(!(length(myValues$indModVal)==length(input$indMod) && all(myValues$indModVal %in% sort(input$indMod)))){
+                                                toPlot <- TRUE
+                                        }
+
+                                        if(toPlot==TRUE){
+                                                shinyBS::updateButton(session, "rChartButton", style="danger", icon=icon("exclamation-circle"))
+                                        }else{
+                                                shinyBS::updateButton(session, "rChartButton", style="success", icon=icon("check-circle"))
+                                        }
+                                }
+			}
+		})
+
+                #observeEvent(input$optMod, {
+		#	if(is.null(myValues$modules_ll))
+                #        return(NULL)
+                #     
+		#	print("%%% IN OBSERVE OPT MOD INPUT %%%") 
+                #        modsOptCon <- unique(c(input$optMod, input$conMod))
+                #        modsOptInd <- unique(c(input$optMod, input$indMod))
+                #        tmpChoices <- names(myValues$modules_ll[["ig"]])
+		#	if(is.null(modsOptCon)){
+		#		tmpChoicesInd <- tmpChoices
+		#	}else{
+		#		idx <- which(tmpChoices %in% modsOptCon)
+		#		tmpChoicesInd <- tmpChoices[-idx]
+		#	}
+		#	if(is.null(modsOptInd)){
+		#		tmpChoicesCon <- tmpChoices
+		#	}else{
+		#		idx <- which(tmpChoices %in% modsOptInd)
+		#		tmpChoicesCon <- tmpChoices[-idx]
+		#	}
+                #        updateSelectInput(session, "conMod", choices=tmpChoicesCon, selected=input$conMod)
+                #        updateSelectInput(session, "indMod", choices=tmpChoicesInd, selected=input$indMod)
+                #})
+
+                #observeEvent(input$conMod, {
+		#	if(is.null(myValues$modules_ll))
+                #        return(NULL)
+                #      
+		#	print("%%% IN OBSERVE CON MOD INPUT %%%") 
+                #        modsOptCon <- unique(c(input$optMod, input$conMod))
+                #        modsConInd <- unique(c(input$conMod, input$indMod))
+                #        tmpChoices <- names(myValues$modules_ll[["ig"]])
+		#	if(is.null(modsOptCon)){
+		#		tmpChoicesInd <- tmpChoices
+		#	}else{
+		#		idx <- which(tmpChoices %in% modsOptCon)
+		#		tmpChoicesInd <- tmpChoices[-idx]
+		#	}
+		#	if(is.null(modsConInd)){
+		#		tmpChoicesOpt <- tmpChoices
+		#	}else{
+		#		idx <- which(tmpChoices %in% modsConInd)
+		#		tmpChoicesOpt <- tmpChoices[-idx]
+		#	}
+                #        updateSelectInput(session, "optMod", choices=tmpChoicesOpt, selected=input$optMod)
+                #        updateSelectInput(session, "indMod", choices=tmpChoicesInd, selected=input$indMod)
+                #})
+
+                #observeEvent(input$indMod, {
+		#	if(is.null(myValues$modules_ll))
+                #        return(NULL)
+                #      
+		#	print("%%% IN OBSERVE IND MOD INPUT %%%") 
+                #        modsOptInd <- unique(c(input$optMod, input$indMod))
+                #        modsConInd <- unique(c(input$conMod, input$indMod))
+                #        tmpChoices <- names(myValues$modules_ll[["ig"]])
+		#	if(is.null(modsOptInd)){
+		#		tmpChoicesCon <- tmpChoices
+		#	}else{
+		#		idx <- which(tmpChoices %in% modsOptInd)
+		#		tmpChoicesCon <- tmpChoices[-idx]
+		#	}
+		#	if(is.null(modsConInd)){
+		#		tmpChoicesOpt <- tmpChoices
+		#	}else{
+		#		idx <- which(tmpChoices %in% modsConInd)
+		#		tmpChoicesOpt <- tmpChoices[-idx]
+		#	}
+                #        updateSelectInput(session, "optMod", choices=tmpChoicesOpt, selected=input$optMod)
+                #        updateSelectInput(session, "conMod", choices=tmpChoicesCon, selected=input$conMod)
+                #})
+
 		shinyjs::onclick("toggleColScheme", shinyjs::toggle(id="colScheme", anim=TRUE))
 		shinyjs::onclick("showAdvancedOptions", shinyjs::toggle(id="advancedOptions", anim=TRUE))
 		shinyjs::onclick("showColorOptionsMain", shinyjs::toggle(id="colorOptionsMain", anim=TRUE))
@@ -812,14 +1607,16 @@ shinyServer(
                 })
 
 		shinyBS::addPopover(session, "IGraphVis_info", "Main Graph Info", content=paste0("<p>Graphical representation of the inferred network, nodes represent genes and edges represent the connection between the genes.</p> ", 
-				"<p>Node color represents the positive and negative trend of gene by differential expression. ",
+				"<p>Default node color represents the positive and negative trend of gene by differential expression. ",
 				"Edge color represents the positive or negative correlation between the genes.</p> ",
-				"<p>Scroll up/down within the plot area to zoom in/zoom out, click and drag within the plot area to move the plot. ",
-				"Hover over a node to see the node name, clicking a node opens NCBI ENTREZ GENE database record of the gene represented by that node.</p> ",
+				"<p>Detected modules can be highlighted by checking box 'Show Modules', node color is updated to represent the module. ",
+				"Color association of modules is presented in the legend, graph view can be focused to a specific module by selection the module of interest from 'Focus Module'.</p> ",
 				"<p>Plot aesthetics and representation can be changed from the 'Show/Hide Aesthetics Options' section, click on the label to see the panel of options. ",
 				"This panel provides option to change graph layout, specify percentile threshold to denote positively and negatively associated nodes. ",
 				"Aesthetics can be altered to show gene rank as node color, increase/decrease node label size, alter the shape of the node and ",
-				"specify edge width. Cutomization options for node color, edge color, background color, node border color are also provided.</p>"
+				"specify edge width. Cutomization options for node color, edge color, background color, node border color are also provided.</p>",
+				"<p>Scroll up/down within the plot area to zoom in/zoom out, click and drag within the plot area to move the plot. ",
+				"Hover over a node to see the node name, clicking a node opens NCBI ENTREZ GENE database record of the gene represented by that node.</p> "
 			),
 			placement="right",
 			trigger="focus",
@@ -827,43 +1624,21 @@ shinyServer(
 			options=list(container="#main_info")
 		)
 
-		shinyBS::addPopover(session, "smallSubNetVis_info", "Small Set Graph Info", content=paste0("<p>Graphical representation of the sub-network extracted from the main network ", 
-				"by using the top ranked genes specified in 'Small Set' option (default: 5) as seed genes. </p>",
-				"<p>The size of top ranked genes is set from the 'Show/hide Advanced Options' panel. ",
-				"Seed genes are highlighted as per the color scheme in 'Show/Hide Aesthetics Options' panel. ",
-				"Aesthetics customization is same as main graph.</p>"
+		shinyBS::addPopover(session, "modVis_info", "Module Info", content=paste0("<p>Graphical representation of the modules detected from the main network ", 
+				"by using one the community detection methods (DEFAULT:Walktrap) and minimum module size (DEFAULT:10). </p>",
+				"<p>These parameters can be set from the 'Show/hide Advanced Options' panel. ",
+				"Selected modules are highlighted with specific colors, module color association is presented as a legend. ",
+				"General aesthetics customization and layout is same as main graph.</p>"
 			),
 			placement="right",
 			trigger="focus",
-			options=list(container="#small_info")
+			options=list(container="#mod_info")
 		)
 
-		shinyBS::addPopover(session, "mediumSubNetVis_info", "Medium Set Graph Info", content=paste0("<p>Graphical representation of the sub-network extracted from the main network. ", 
-				"by using the top ranked genes specified in 'Medium Set' option (default: 10) as seed genes. </p>",
-				"<p>The size of top ranked genes is set from the 'Show/Hide Advanced Options' panel. ",
-				"Seed genes are highlighted as per the color scheme in 'Show/hide Aesthetics Options' panel. ",
-				"Aesthetics customization is same as main graph.</p>"
-			),
-			placement="right",
-			trigger="focus",
-			options=list(container="#medium_info")
-		)
-
-		shinyBS::addPopover(session, "largeSubNetVis_info", "Large Set Graph Info", content=paste0("<p>Graphical representation of the sub-network extracted from the main network. ", 
-				"by using the top ranked genes specified in 'Large Set' option (default: 20) as seed genes. </p>",
-				"<p>The size of top ranked genes is set from the 'Show/Hide Advanced Options' panel. ",
-				"Seed genes are highlighted as per the color scheme in 'Show/hide Aesthetics Options' panel. ",
-				"Aesthetics customization is same as main graph.</p>"
-			),
-			placement="right",
-			trigger="focus",
-			options=list(container="#large_info")
-		)
-
-		shinyBS::addPopover(session, "enrichmentDT_info", "Annotation Enrichment Info", content=paste0("<p>Annotation enrichment is performed by Fisher's Exact Test on the set of genes from each extracted sub-networks. </p>",
-				"<p>GO term are filtered as enriched in small, medium and large gene set and the number of genes representing the GO term should be greater than or equal to the enrichment result from smaller gene set.</p>",
-				"<p>Score associated with each GO term is the sum of normalized gene counts across the three enrichment results. </p>",
-				"<p>List of genes from the enrichment result of the largest gene set is also reported. </p>"
+		shinyBS::addPopover(session, "enrichmentDT_info", "Annotation Enrichment Info", content=paste0("<p>Annotation enrichment is performed by Fisher's Exact Test on the set of genes from each detected module. </p>",
+				"<p>Enrichment result is filtered by EASE score of '0.05'.</p>",
+				"<p>Enrichment table for a module can be displayed by selecting the module of interest from the selection box 'Select Module'. </p>",
+				"<p>Enrichment table for all the modules can be exported as a single spreasheet from the 'Download & Export' section. </p>"
 			),
 			placement="right",
 			trigger="focus",
@@ -880,10 +1655,43 @@ shinyServer(
 			options=list(container="#tile_info")
 		)
 
+		shinyBS::addPopover(session, "simHeatmap_info", "GO based Similarity Heatmap Info", content=paste0("<p>Similarity between detected modules is computed as the Jaccard Index for set of significant Gene Ontology terms enriched by the genes constituting the module. </p>",
+				"<p>The Jaccard Index is assisted with Semantic Similarity between GO terms, so each individual match is not exact but is signigficantly close related terms based on Sematic Similarity. </p>",
+				"<p>The Heatmap is generated by converting the similarity matrix into a distance matrix (1-sim), the computed distance matrix is also used to draw the cluster dendogram on rows and columns. </p>",
+				"<p>The color scale ranges from red to yellow, meaning the most similar are red and most distant are yellow. </p>"
+			),
+			placement="right",
+			trigger="focus",
+			options=list(container="#heatmap_info")
+		)
+
+		shinyBS::addPopover(session, "radarChart_info", "Radar Chart Info", content=paste0("<p>Radar chart represents the multivariate information in 2-dimensional plane. </p>",
+				"<p>This radar chart plots an axis for each detected module and values for each property related to the module are plotted on their axis, points for each property have a specific color and are joined to points on other axis creating a color polygon for that property. </p>",
+				"<p>In this radar chart 'rank_centrality' represent the median rank of the genes by their centrality properties in the whole network. 'rank_pv' represents the median rank of the genes by differential analysis P.Value (EASE_Score) in the whole gene list. 'rank_lfc' represents the median rank of the genes by differential analysis log Fold Change in the whole gene list. 'rank_edge' represents the median edge rank of the edges in the modules in the overall edge ranks of the while network. 'size' represents the normalized number of nodes in the module vs the total number of nodes in the whole network. 'GO' represents the similairty within the set of significantly enriched GO terms in the module as semantic similarity assisted Jaccrd Index. </p>",
+				"<p>User can hide/display the points for a property by clicking on the property name in the legend. </p>"
+			),
+			placement="right",
+			trigger="focus",
+			options=list(container="#radar_info")
+		)
+
+		shinyBS::addPopover(session, "optRadarChart_info", "Optimization Radar Chart Info", content=paste0("<p>Radar chart represents the multivariate information in 2-dimensional plane. </p>",
+				"<p>This radar chart plots an axis for each property and values representing each of the 'chosen', 'contrast' and individual modules are plotted point on their axis, points for each module have a specific color and are joined to points on other axis creating a color polygon for that module. </p>",
+				"<p>In this radar chart axis 'rank_centrality' represent the median rank of the genes by their centrality properties in the whole network. 'rank_pv' represents the median rank of the genes by differential analysis P.Value (EASE_Score) in the whole gene list. 'rank_lfc' represents the median rank of the genes by differential analysis log Fold Change in the whole gene list. 'rank_edge' represents the median edge rank of the edges in the modules in the overall edge ranks of the while network. 'size' represents the normalized number of nodes in the module vs the total number of nodes in the whole network. 'GO' represents the similairty within the set of significantly enriched GO terms in the module as semantic similarity assisted Jaccrd Index. </p>",
+				"<p>The module 'chosen' represents the grouping of selected modules, module 'contrast' represents the grouping of modules selected as contrast and selected individual modules are plotted with their original labels. </p>",
+				"<p>User can hide/display the points for a module by clicking on the property name in the legend. </p>"
+			),
+			placement="right",
+			trigger="focus",
+			options=list(container="#opt_radar_info")
+		)
+
 		shinyBS::addPopover(session, "rankDT_info", "Rank Table Info", content=paste0("<p>Table containing the final rank of the gene from the whole network inferred by INfORM, ",
 				"HGNC Gene Symbol of the gene, unique identifier from the NCBI ENTREZ Gene database, descriptive name of the gene, user provided differential expression score, ",
-				"membership of gene in top5, top10 and top20 candidate genes, membership of gene in response modules extracted by using the top5, top10 and top20 candidate genes. </p>",
-				"<p>Membership information is cumulative, genes of compact membership also belong to the broader membership, eg: gene membership 5+10+20 = total genes in 20. </p>"
+				"P.Value and log fold change of the differentially expressed genes provided by the user, ",
+				"membership of gene in modules extracted by using community detection method. </p>",
+				"<p>Genes not belonging to any module over the minimum size threshold are marked as 'orphan' members. </p>",
+				"<p>Overall rank table along with module specific rank tables can be exported as a single spreadsheet. </p>"
 			),
 			placement="right",
 			trigger="focus",
