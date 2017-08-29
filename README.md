@@ -3,6 +3,18 @@
 
 A novel computational method and its R and web-based implementations, to perform inference of gene network from transcriptome data and prioritization of key genes with central functional and topological role in the network.
 
+#### Install Dependencies
+```R
+  #Install CRAN dependencies
+  cran_pkgs <- c("V8", "RSQLite", "TopKLists", "doParallel", "foreach", "igraph", "plyr", "shiny", "shinyjs", "shinyBS", "shinydashboard", "colourpicker", "DT", "R.utils", "treemap", "visNetwork", "abind")
+  install.packages(cran_pkgs, repo="http://cran.rstudio.org", dependencies=T)
+  
+  #Install Bioconductor dependencies
+  source("http://bioconductor.org/biocLite.R")
+  bioc_pkgs <- c("org.Hs.eg.db", "org.Mm.eg.db", "GO.db", "AnnotationDbi", "GSEABase", "minet", "GOSemSim")
+  biocLite(bioc_pkg, suppressUpdates=T)
+```
+
 #### How to run INfORM from GitHub
 ```R
   # Load 'shiny' library
