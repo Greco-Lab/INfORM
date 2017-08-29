@@ -18,7 +18,6 @@ suppressMessages(library(ggplot2))
 suppressMessages(library(visNetwork))
 suppressMessages(library(radarchart))
 suppressMessages(library(WriteXLS))
-suppressMessages(library(made4))
 suppressMessages(library(gplots))
 
 net_attr <- c("betweenness", "cc", "degree", "eccentricity", "closeness", "eigenvector")
