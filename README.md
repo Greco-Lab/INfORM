@@ -12,7 +12,7 @@ A novel computational method and its R and web-based implementations, to perform
     print(paste0("Missing ", length(cran_pkgs.inst), " CRAN Packages:"))
     for(pkg in cran_pkgs.inst){
       print(paste0("Installing Package:'", pkg, "'..."))
-      install.packages(pkg, repo="http://cran.rstudio.org", dependencies=T)
+      install.packages(pkg, repo="http://cran.rstudio.org", dependencies=TRUE)
       print("Installed!!!")
     }
   }
