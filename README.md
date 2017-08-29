@@ -16,7 +16,6 @@ A novel computational method and its R and web-based implementations, to perform
       print("Installed!!!")
     }
   }
-
   
   #Install Bioconductor dependencies
   source("http://bioconductor.org/biocLite.R")
