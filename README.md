@@ -26,7 +26,7 @@ A novel computational method and its R and web-based implementations, to perform
     print(paste0("Missing ", length(bioc_pkgs.inst), " Bioconductor Packages:"))
     for(pkg in bioc_pkgs.inst){
       print(paste0("Installing Package:'", pkg, "'..."))
-      biocLite(pkg, suppressUpdates=T)
+      biocLite(pkg, suppressUpdates=TRUE)
       print("Installed!!!")
     }
   }
