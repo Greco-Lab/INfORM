@@ -1,0 +1,48 @@
+---
+title: "GO SUMMARIZATION TILEPLOT"
+output: pdf_document
+params:
+  BP: NA
+  CC: NA
+  MF: NA
+---
+
+```{r check_BP, echo=F}
+isBP <- !is.null(params$BP)
+```
+
+```{r check_CC, echo=F}
+isCC <- !is.null(params$CC)
+```
+
+```{r check_MF, echo=F}
+isMF <- !is.null(params$MF)
+```
+
+# Biological Process
+```{r BP_tileplot, echo=F, fig.height=9, fig.width=9}
+if(isBP){
+        plot_treemap(params$BP, ont="BP")
+}else{
+        print("Nothing to plot!")
+}
+```
+
+# Molecular Function
+```{r MF_tileplot, echo=F, fig.height=9, fig.width=9}
+if(isMF){
+        plot_treemap(params$MF, ont="MF")
+}else{
+        print("Nothing to plot!")
+}
+```
+
+# Cellular Component
+```{r CC_tileplot, echo=F, fig.height=9, fig.width=9}
+if(isCC){
+        plot_treemap(params$CC, ont="CC")
+}else{
+        print("Nothing to plot!")
+}
+```
+

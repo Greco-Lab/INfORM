@@ -4,12 +4,12 @@ suppressMessages(library(shinyBS))
 suppressMessages(library(shinydashboard))
 suppressMessages(library(DT))
 suppressMessages(library(R.utils))
-suppressMessages(library(ggplot2))
 suppressMessages(library(GSEABase))
 suppressMessages(library(visNetwork))
 suppressMessages(library(randomcoloR))
 suppressMessages(library(radarchart))
 suppressMessages(library(Rserve))
+suppressMessages(library(WriteXLS))
 print("Print Source Directory")
 print(dirname(getSrcDirectory(function(x){x})))
 functions_R <- file.path(dirname(getSrcDirectory(function(x){x})), "INfORM_functions.R")
@@ -31,6 +31,12 @@ tmpMethod <- NULL
 shinyServer(
 	function(input, output, session){
 		myValues <- shiny::reactiveValues(gxTable=NULL, dgxTable=NULL, gxCorMat=NULL, iGraph=NULL, updateTabCorMat=0, cList=NULL, mList=NULL, GO_clust_summ_list=NULL)
+
+                #Close R session on closing the graphical window
+                session$onSessionEnded(function(){
+                        stopApp()
+                        q("no")
+                })
 
 		myValues$sepChoices <- c("TAB", ",", ";", "SPACE", "OTHER")
 		myValues$quoteChoices <- c(NA, "SINGLE", "DOUBLE")
