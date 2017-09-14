@@ -32,11 +32,11 @@ shinyServer(
 	function(input, output, session){
 		myValues <- shiny::reactiveValues(gxTable=NULL, dgxTable=NULL, gxCorMat=NULL, iGraph=NULL, updateTabCorMat=0, cList=NULL, mList=NULL, GO_clust_summ_list=NULL)
 
-                #Close R session on closing the graphical window
-                session$onSessionEnded(function(){
-                        stopApp()
-                        q("no")
-                })
+                ##Close R session on closing the graphical window
+                #session$onSessionEnded(function(){
+                #        stopApp()
+                #        q("no")
+                #})
 
 		myValues$sepChoices <- c("TAB", ",", ";", "SPACE", "OTHER")
 		myValues$quoteChoices <- c(NA, "SINGLE", "DOUBLE")
@@ -193,21 +193,24 @@ shinyServer(
 
                 myValues$method <- shiny::reactive({
                         if(is.null(input$method))
-                        return(methods)
+                        #return(methods)
+                        return(NULL)
 
                         input$method
                 })
 
                 myValues$est <- shiny::reactive({
                         if(is.null(input$est))
-                        return(est.opt)
+                        #return(est.opt)
+                        return(NULL)
 
                         input$est
                 })
 
                 myValues$disc <- shiny::reactive({
                         if(is.null(input$disc))
-                        return(disc.opt)
+                        #return(disc.opt)
+                        return(NULL)
 
                         input$disc
                 })
@@ -246,6 +249,18 @@ shinyServer(
 			#	need(!is.null(myValues$disc()), "No Discretization Method Selected!")
 			#)
 
+                        if(is.null(myValues$method())){
+                                shinyjs::info(paste0("No Inference Algorithm Selected!"))
+                        }
+
+                        if(is.null(myValues$est())){
+                                shinyjs::info(paste0("No Correlation Selected!"))
+                        }
+
+                        if(is.null(myValues$disc())){
+                                shinyjs::info(paste0("No Discretization Method Selected!"))
+                        }
+
                         if(any(
                                 is.null(myValues$gxTable()), 
                                 is.null(myValues$dgxLoaded), 
@@ -254,6 +269,36 @@ shinyServer(
                                 is.null(myValues$disc())
                         ))
                         return(NULL)
+
+			rOrgDB <- unlist(strsplit(input$organism, ";"))[1]
+
+                        ##Check "SYMBOL" mapping to annotation library
+                        annDB <- get(rOrgDB)
+                        allSymbols <- keys(annDB, keytype="SYMBOL")
+
+                        #Check differential expression file
+                        rowNamesDgx <- rownames(myValues$dgxTable)
+                        missingSymbolsIdx <- which(!rowNamesDgx %in% allSymbols)
+                        if(length(missingSymbolsIdx)>0){
+                                shinyjs::info(paste0("Unable to map ", length(missingSymbolsIdx), " of ", length(rowNamesDgx), 
+                                "Gene Symbols from Differential Expression Table to the selected annotation library ", rOrgDB, "!\n\n",
+                                "Missing IDs: \n",
+                                paste0(rowNamesDgx[missingSymbolsIdx], collapse=", ")
+                                ))
+                                return(NULL)
+                        }
+
+                        #Check differential expression file
+                        rowNamesGx <- rownames(myValues$gxTable())
+                        missingSymbolsIdx <- which(!rowNamesGx %in% allSymbols)
+                        if(length(missingSymbolsIdx)>0){
+                                shinyjs::info(paste0("Unable to map ", length(missingSymbolsIdx), " of ", length(rowNamesGx), 
+                                "Gene Symbols from Gene Expression Table to the selected annotation library ", rOrgDB, "!\n\n",
+                                "Missing IDs: \n",
+                                paste0(rowNamesDgx[missingSymbolsIdx], collapse=", ")
+                                ))
+                                return(NULL)
+                        }
 
 			print("Passed Validations.....")
 
@@ -405,7 +450,6 @@ shinyServer(
 			progress$set(message="Module Detection", value=0)
 			updateProgress(detail="Getting Modules...", value=1/4)
 
-			rOrgDB <- unlist(strsplit(input$organism, ";"))[1]
                         modMethod <- input$modMethod
 			minModSize <- input$minModSize
 
@@ -473,6 +517,16 @@ shinyServer(
 			myValues$within_go_sim <- within_go_sim
                         myValues$modMethodVal <- modMethod
 			myValues$minModSizeVal <- minModSize
+
+                        #Response chart variables
+                        myValues$GO_clust_summ_list <- NULL
+                        myValues$optAnnotation <- NULL
+                        myValues$optAE <- NULL
+                        myValues$morphed_gene_ll <- NULL
+                        myValues$morphed_ae_ll <- NULL
+                        myValues$optModVal <- NULL
+                        myValues$conModVal <- NULL
+                        myValues$indModVal <- NULL
                 })
 
 		observeEvent(input$runDetect, {
@@ -574,6 +628,16 @@ shinyServer(
 			myValues$within_go_sim <- within_go_sim
                         myValues$modMethodVal <- modMethod
 			myValues$minModSizeVal <- minModSize
+
+                        #Response chart variables
+                        myValues$GO_clust_summ_list <- NULL
+                        myValues$optAnnotation <- NULL
+                        myValues$optAE <- NULL
+                        myValues$morphed_gene_ll <- NULL
+                        myValues$morphed_ae_ll <- NULL
+                        myValues$optModVal <- NULL
+                        myValues$conModVal <- NULL
+                        myValues$indModVal <- NULL
                 })
 
 		output$totalGeneBox <- shinydashboard::renderValueBox({
@@ -703,6 +767,20 @@ shinyServer(
 			}else{
 				shinyjs::disable("sepT")
 			}
+
+                        if(is.null(myValues$modules)){
+				shinyjs::disable("runDetect")
+                        }else{
+				shinyjs::enable("runDetect")
+                        }
+
+                        if(is.null(input$optMod) || length(input$optMod)<2 || input$optMod==""){
+				shinyjs::disable("rChartButton")
+				shinyBS::addTooltip(session, id="rChartButton", title="Please provide at least two module to merge!", placement="bottom")
+                        }else{
+				shinyjs::enable("rChartButton")
+				shinyBS::removeTooltip(session, id="rChartButton")
+                        }
 		})
 		
                 myValues$iGraph_dynamic <- shiny::reactive({
@@ -1037,7 +1115,7 @@ shinyServer(
                                 need(!is.null(myValues$modules_rank_table), "Waiting for module detection...")
                         )
 			rank_table <- myValues$modules_rank_table
-			radarchart::chartJSRadar(scores=rank_table[,c(-1)], labs=rownames(rank_table))
+			radarchart::chartJSRadar(scores=rank_table[,c(-1)], labs=rownames(rank_table), labelSize=36, polyAlpha=0.3, lineAlpha=0.9, gridLines.lineWidth=10, pointLabels.fontSize=20)
 		})
 
                 ##Module Optimization Radar Chart
@@ -1061,6 +1139,7 @@ shinyServer(
                         optMods <- input$optMod
                         conMods <- input$conMod
                         indMods <- input$indMod
+
                         localIGraph <- myValues$iGraph
 			gene_ll <- myValues$modules_ll[["names"]]
 			ae_ll <- myValues$modules_ll[["ae"]]
@@ -1079,7 +1158,7 @@ shinyServer(
                         morphed_ae_ll <- list()
                         if(!is.null(optMods)){
                                 idx <- which(names(gene_ll) %in% optMods)
-                                morphed_gene_ll[["chosen"]] <- as.character(unlist(gene_ll[idx]))
+                                morphed_gene_ll[["chosen"]] <- unique(as.character(unlist(gene_ll[idx])))
                                 optAeDF <- ldply(ae_ll[idx], data.frame)
                                 #idx <- which(duplicated(optAeDF$GOID))
                                 #if(length(idx)>1){
@@ -1093,7 +1172,7 @@ shinyServer(
                         }
                         if(!is.null(conMods)){
                                 idx <- which(names(gene_ll) %in% conMods)
-                                morphed_gene_ll[["contrast"]] <- as.character(unlist(gene_ll[idx]))
+                                morphed_gene_ll[["contrast"]] <- unique(as.character(unlist(gene_ll[idx])))
 
                                 conAeDF <- ldply(ae_ll[idx], data.frame)
                                 #idx <- which(duplicated(conAeDF$GOID))
@@ -1116,7 +1195,7 @@ shinyServer(
 
 			updateProgress(detail="Getting New Ranks...", value=2/4)
                         #rank_table <- get_rank_table(iGraph=localIGraph, gene_ll=morphed_gene_ll, ae_ll=morphed_ae_ll,  rl=rl, rl.c=rl.c, rl.pv=rl.pv, rl.lfc=rl.lfc, rl.edge=edgeRank, annDB=rOrgDB, IC_ll=IC_ll)
-                        rank_table <- get_rank_table(iGraph=localIGraph, gene_ll=morphed_gene_ll, ae_ll=morphed_ae_ll,  rl=rl, rl.c=rl.c, rl.pv=rl.pv, rl.lfc=rl.lfc, rl.edge=edgeRank) ##Not computing GO sim
+                        rank_table <- get_rank_table(iGraph=localIGraph, gene_ll=morphed_gene_ll, rl=rl, rl.c=rl.c, rl.pv=rl.pv, rl.lfc=rl.lfc, rl.edge=edgeRank) ##Not computing GO sim
                         rank_table <- as.data.frame(t(rank_table[,-1]))
 
 			updateProgress(detail="Summarizing Response GOs...", value=3/4)
@@ -1143,7 +1222,7 @@ shinyServer(
                         #        need(!is.null(myValues$optAE), "Waiting for module optimization results...")
                         #)
                         rank_table <- myValues$optAnnotation
-			radarchart::chartJSRadar(scores=rank_table, labs=rownames(rank_table))
+			radarchart::chartJSRadar(scores=rank_table, labs=rownames(rank_table), labelSize=36, polyAlpha=0.3, lineAlpha=0.9, gridLines.lineWidth=5, pointLabels.fontSize=20)
 		})
 
 		output$downloadOptRankDT <- shiny::downloadHandler(
@@ -1297,14 +1376,21 @@ shinyServer(
                                 return(NULL)
                         }
 
-                        shinyjs::info("Rserve socket daemon started!!! \n\nKEEP CALM AND USE RSclient IN ANOTHER R SESSION TO ACCESS THE DAEMON.
-                        \n\n --- R CODE ---\n              
-                        c <- RSclient::RSconnect(host = \"localhost\", port = 6311)\n 
-                        RSclient::RSeval(c, \"names(shiny_app_vars)\")\n 
-                        RSclient::RSshutdown(c)\n 
-                        RSclient::RSclose(c)\n 
-                         --- R CODE ---              
-                        ")
+                        shinyjs::info(paste0("Rserve socket daemon started!!!\n\n",
+                        "NOTE: YOU HAVE STARTED A SOCKET SERVER SESSION. THIS SHINY APP WILL BE UNRESPONSIVE UNTIL THE SERVER IS SHUTDOWN FROM A REMOTE SESSION.\n\n",
+                        "KEEP CALM AND USE RSclient IN ANOTHER R SESSION TO ACCESS THE DAEMON.\n\n",
+                        " --- R CODE ---\n",
+                        "##Connect to INfORM\n",
+                        "c <- RSclient::RSconnect(host = \"localhost\", port = 6311)\n\n",
+                        "##List names of the variables from INfORM\n",
+                        "RSclient::RSeval(c, \"names(shiny_app_vars)\")\n\n",
+                        "##Store the shiny varialbes locally\n",
+                        "shiny_app_vars <- RSclient::RSeval(c, \"shiny_app_vars\")\n\n",
+                        "##Shutdown server and close connection\n",
+                        "RSclient::RSshutdown(c)\n",
+                        "RSclient::RSclose(c)\n",
+                        " --- R CODE ---"
+                        ))
                         #print("Print on deamon start button:")
                         #print(ls())
                         #print(environment())
@@ -1504,6 +1590,9 @@ shinyServer(
                                                 toPlot <- TRUE
                                         }
                                         if(!(length(myValues$indModVal)==length(input$indMod) && all(myValues$indModVal %in% sort(input$indMod)))){
+                                                toPlot <- TRUE
+                                        }
+                                        if(length(input$optMod)==0 && length(input$conMod)==0 && length(input$indMod)==0){
                                                 toPlot <- TRUE
                                         }
 

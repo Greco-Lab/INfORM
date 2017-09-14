@@ -1,5 +1,4 @@
 
-suppressMessages(library(grid))
 suppressMessages(library(igraph))
 suppressMessages(library(TopKLists))
 suppressMessages(library(org.Hs.eg.db))
@@ -18,7 +17,6 @@ suppressMessages(library(ggplot2))
 suppressMessages(library(visNetwork))
 suppressMessages(library(radarchart))
 suppressMessages(library(WriteXLS))
-suppressMessages(library(made4))
 suppressMessages(library(gplots))
 
 net_attr <- c("betweenness", "cc", "degree", "eccentricity", "closeness", "eigenvector")
@@ -731,7 +729,7 @@ annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv, rl.lfc, rl.edge, 
 	return(res_ll)
 }
 
-get_rank_table <- function(iGraph, gene_ll, ae_ll, rl, rl.c, rl.pv, rl.lfc, rl.edge, annDB="org.Hs.eg.db", IC_ll=NULL){
+get_rank_table <- function(iGraph, gene_ll, rl, rl.c, rl.pv, rl.lfc, rl.edge){
 	#res_ll <- list()
 	res_ll <- lapply(
 		gene_ll,

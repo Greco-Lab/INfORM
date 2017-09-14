@@ -139,11 +139,54 @@ dashboardPage(
 							wellPanel(
 								fluidRow(
 									column(12,
-									    #h4("Select Parameters to Run MINET (Mutual Information NETworks)"),
-									    uiOutput("selMethod"),
-									    uiOutput("selEst"),
-									    uiOutput("selDisc")#,
-									    #uiOutput("selCores")
+									    #uiOutput("selMethod"),
+									    #uiOutput("selEst"),
+									    #uiOutput("selDisc")
+                                                                            selectInput("method", "Select Inference Algorithm", 
+                                                                                    choices=c("clr",
+                                                                                            "aracne",
+                                                                                            "mrnet",
+                                                                                            "mrnetb"
+                                                                                    ), 
+                                                                                    multiple=TRUE, 
+                                                                                    selected=c("clr",
+                                                                                            "aracne",
+                                                                                            "mrnet",
+                                                                                            "mrnetb"
+                                                                                    )
+                                                                            ),
+                                                                            selectInput("est", "Select Correlation", 
+                                                                                    choices=c("pearson",
+                                                                                            "spearman",
+                                                                                            "kendall",
+                                                                                            "mi.empirical",
+                                                                                            "mi.mm",
+                                                                                            "mi.shrink",
+                                                                                            "mi.sg"
+                                                                                    ), 
+                                                                                    multiple=TRUE, 
+                                                                                    selected=c("pearson",
+                                                                                            "spearman",
+                                                                                            "kendall",
+                                                                                            "mi.empirical",
+                                                                                            "mi.mm",
+                                                                                            "mi.shrink",
+                                                                                            "mi.sg"
+                                                                                    ) 
+                                                                            ),
+                                                                            selectInput("disc", "Select Discretization Method", 
+                                                                                    choices=c("none",
+                                                                                            "equalfreq",
+                                                                                            "equalwidth",
+                                                                                            "globalequalwidth"
+                                                                                    ), 
+                                                                                    multiple=TRUE, 
+                                                                                    selected=c("none",
+                                                                                            "equalfreq",
+                                                                                            "equalwidth",
+                                                                                            "globalequalwidth"
+                                                                                    )
+                                                                            )
 									)
 								)
 							),fluidRow(
@@ -434,7 +477,7 @@ dashboardPage(
 								)),fluidRow(column(12,
                                                                         wellPanel(
                                                                                 div(id="rChart", class="rChart",
-                                                                                        chartJSRadarOutput('optRadarChart', width="100", height="100")
+                                                                                        chartJSRadarOutput('optRadarChart', width="70%", height="70%")
                                                                                 )
                                                                         )
                                                                 ))
@@ -457,8 +500,8 @@ dashboardPage(
                                         ))
 				)
 			)
-		)),fluidRow(column(12,
-                        actionButton("rserve_submit", "START SOCKET DAEMON")
+		#)),fluidRow(column(12,
+                #        actionButton("rserve_submit", "START SOCKET DAEMON")
 		))
 	)
 )
