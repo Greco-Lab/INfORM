@@ -107,10 +107,10 @@ shinyServer(
 			fileLines <- gsub("\t\t", "\tNA\t", fileLines)
 			fileLines <- gsub("\t$", "\tNA", fileLines)
 			close(con)
-			colNumByRowDist <- table(sapply(fileLines, function(x) {length(strsplit(x, sepChar)[[1]])}, USE.NAMES=F))
+			colNumByRowDist <- table(sapply(fileLines, function(x) {length(strsplit(x, sepChar)[[1]])}, USE.NAMES=FALSE))
 			if(length(colNumByRowDist) > 1){
 				fileLines2 <- fileLines[-1]
-				colNumByRowDist2 <- table(sapply(fileLines2, function(x) {length(strsplit(x, sepChar)[[1]])}, USE.NAMES=F))
+				colNumByRowDist2 <- table(sapply(fileLines2, function(x) {length(strsplit(x, sepChar)[[1]])}, USE.NAMES=FALSE))
 				if(length(colNumByRowDist2) > 1){
 					shinyjs::info(paste0("Separating character '", sepChar, "', results in inconsistent number of columns!\n\nPlease check the input file format and select the correct separating character!"))
 					myValues$dgxLoaded <- NULL
@@ -151,7 +151,7 @@ shinyServer(
 					scrollX=TRUE, 
 					pageLength=2,
 					lengthMenu=c(1,2,3),
-					ordering=F
+					ordering=FALSE
 				)
 			)
 		},server=TRUE)
@@ -270,6 +270,8 @@ shinyServer(
                         ))
                         return(NULL)
 
+			localGxTable <- myValues$gxTable()
+			localDgxTable <- myValues$dgxTable
 			rOrgDB <- unlist(strsplit(input$organism, ";"))[1]
 
                         ##Check "SYMBOL" mapping to annotation library
@@ -277,7 +279,7 @@ shinyServer(
                         allSymbols <- keys(annDB, keytype="SYMBOL")
 
                         #Check differential expression file
-                        rowNamesDgx <- rownames(myValues$dgxTable)
+                        rowNamesDgx <- rownames(localDgxTable)
                         missingSymbolsIdx <- which(!rowNamesDgx %in% allSymbols)
                         if(length(missingSymbolsIdx)>0){
                                 shinyjs::info(paste0("Unable to map ", length(missingSymbolsIdx), " of ", length(rowNamesDgx), 
@@ -285,11 +287,37 @@ shinyServer(
                                 "Missing IDs: \n",
                                 paste0(rowNamesDgx[missingSymbolsIdx], collapse=", ")
                                 ))
-                                return(NULL)
+                                if((length(missingSymbolsIdx)/length(rowNamesDgx))*100>20){
+                                        shinyjs::info("Missing too many genes from Differential Expression Table.\nEXITING!!!")
+                                        return(NULL)
+                                }
+                                #return(NULL)
+                                localDgxTable <- localDgxTable[-missingSymbolsIdx,]
+                                rowNamesDgx <- rownames(localDgxTable)
+                                localGxTable <- localGxTable[rowNamesDgx,]
                         }
 
-                        #Check differential expression file
-                        rowNamesGx <- rownames(myValues$gxTable())
+                        #Check differential expression vs expression matrix
+                        rowNamesDgx <- rownames(localDgxTable)
+                        rowNamesGx <- rownames(localGxTable)
+                        missingSymbolsIdx <- which(!rowNamesDgx %in% rowNamesGx)
+                        if(length(missingSymbolsIdx)>0){
+                                shinyjs::info(paste0("Unable to map ", length(missingSymbolsIdx), " of ", length(rowNamesDgx), 
+                                "Gene Symbols from Differential Expression Table to the Gene Expression Matrix!\n\n",
+                                "Missing IDs: \n",
+                                paste0(rowNamesDgx[missingSymbolsIdx], collapse=", ")
+                                ))
+
+                                if((length(missingSymbolsIdx)/length(rowNamesDgx))*100>20){
+                                        shinyjs::info("Missing too many genes from Differential Expression Table.\nEXITING!!!")
+                                        return(NULL)
+                                }
+                                localDgxTable <- localDgxTable[missingSymbolsIdx,]
+                                localGxTable <- localGxTable[rowNamesDgx,]
+                        }
+
+                        #Check gene expression matrix
+                        rowNamesGx <- rownames(localGxTable)
                         missingSymbolsIdx <- which(!rowNamesGx %in% allSymbols)
                         if(length(missingSymbolsIdx)>0){
                                 shinyjs::info(paste0("Unable to map ", length(missingSymbolsIdx), " of ", length(rowNamesGx), 
@@ -297,7 +325,7 @@ shinyServer(
                                 "Missing IDs: \n",
                                 paste0(rowNamesDgx[missingSymbolsIdx], collapse=", ")
                                 ))
-                                return(NULL)
+                                #return(NULL)
                         }
 
 			print("Passed Validations.....")
@@ -314,10 +342,6 @@ shinyServer(
 				progress$close()
 				shiny::updateTabsetPanel(session, "display", selected="corMat_display")
 			})
-
-			localGxTable <- myValues$gxTable()
-			#localDgxTable <- myValues$dgxTable()
-			localDgxTable <- myValues$dgxTable
 
                         #print("localGxTable : ")
                         #print(dim(localGxTable))
@@ -442,8 +466,8 @@ shinyServer(
 			rankAttr.c <- rank_attr[-which(rank_attr=="score")]
                         localRankedGenes <- get_ranked_gene_list(localIGraph, rank_list_attr=rankAttr, debug_output=FALSE)
                         localRankedGenes.c <- get_ranked_gene_list(localIGraph, rank_list_attr=rankAttr.c, debug_output=FALSE)
-                        localRankedGenes.pv <- V(localIGraph)$name[order(V(localIGraph)$pval, decreasing=F)]
-                        localRankedGenes.lfc <- V(localIGraph)$name[order(abs(V(localIGraph)$lfc), decreasing=T)]
+                        localRankedGenes.pv <- V(localIGraph)$name[order(V(localIGraph)$pval, decreasing=FALSE)]
+                        localRankedGenes.lfc <- V(localIGraph)$name[order(abs(V(localIGraph)$lfc), decreasing=TRUE)]
 
                         myValues$rankedGenes <- localRankedGenes
 
@@ -965,12 +989,12 @@ shinyServer(
 			content = function(con){
                                 modules_ll <- myValues$modules_ll
                                 ae_list <- modules_ll[["ae"]]
-                                idx <- which(unlist(lapply(ae_list, is.null), use.names=F))
+                                idx <- which(unlist(lapply(ae_list, is.null), use.names=FALSE))
                                 if(length(idx)>0){
                                             ae_list <- ae_list[-idx]
                                 }
                                 #names(ae_list) <- paste0("mod_", names(ae_list))
-                                WriteXLS(ae_list, ExcelFileName=con, col.names=T, AdjWidth=T, BoldHeaderRow=T)
+                                WriteXLS(ae_list, ExcelFileName=con, col.names=TRUE, AdjWidth=TRUE, BoldHeaderRow=TRUE)
 			}
 		)
 
@@ -1239,7 +1263,7 @@ shinyServer(
                                 modDF_LL <- get_mod_gene_tables(ig=localIGraph, rankedGenes=rl, modLL=modules_ll, orgDB=orgDB)
                                 outLL <- list(master=masterDF)
                                 outLL <- c(outLL, modDF_LL)
-                                WriteXLS(outLL, ExcelFileName=con, col.names=T, AdjWidth=T, BoldHeaderRow=T)
+                                WriteXLS(outLL, ExcelFileName=con, col.names=TRUE, AdjWidth=TRUE, BoldHeaderRow=TRUE)
 			}
 		)
 
@@ -1365,7 +1389,7 @@ shinyServer(
                                 modDF_LL <- get_mod_gene_tables(ig=localIGraph, rankedGenes=rl, modLL=modules_ll, orgDB=orgDB)
                                 outLL <- list(master=masterDF)
                                 outLL <- c(outLL, modDF_LL)
-                                WriteXLS(outLL, ExcelFileName=con, col.names=T, AdjWidth=T, BoldHeaderRow=T)
+                                WriteXLS(outLL, ExcelFileName=con, col.names=TRUE, AdjWidth=TRUE, BoldHeaderRow=TRUE)
 			}
 		)
 

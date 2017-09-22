@@ -116,9 +116,9 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 	print(paste("DoPar Name: ",  foreach::getDoParName(), sep=""))
 
 	print(paste0("Before For Each, ", "Number of Combinations:", length(parList)))
-	utils::capture.output(print(paste0("Starting Parallel Cluster For ", length(parList), " Combinations ", timestamp())), file="minet-log.txt", append=T)
-	utils::capture.output(print(paste0("Starting Parallel Cluster For ", length(parList), " Combinations ", timestamp())), file="minet-to-run.txt", append=T)
-	utils::capture.output(print(paste0("Starting Parallel Cluster For ", length(parList), " Combinations ", timestamp())), file="minet-completed.txt", append=T)
+	utils::capture.output(print(paste0("Starting Parallel Cluster For ", length(parList), " Combinations ", timestamp())), file="minet-log.txt", append=TRUE)
+	utils::capture.output(print(paste0("Starting Parallel Cluster For ", length(parList), " Combinations ", timestamp())), file="minet-to-run.txt", append=TRUE)
+	utils::capture.output(print(paste0("Starting Parallel Cluster For ", length(parList), " Combinations ", timestamp())), file="minet-completed.txt", append=TRUE)
 	#out.tmp.list <- foreach(i=1:length(parList)) %do% {
 	out.tmp.list <- foreach::foreach(i=1:length(parList)) %dopar% {
 		#capture.output(print("Start For Each"), file="minet-log.txt", append=T)
@@ -133,9 +133,9 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 		}
 		else{
 			if(debug_output==TRUE)
-			utils::capture.output(print(paste("----",mt,est,disc, sep="__")), file="minet-log.txt", append=T)
+			utils::capture.output(print(paste("----",mt,est,disc, sep="__")), file="minet-log.txt", append=TRUE)
 
-			utils::capture.output(print(paste0("Iteration-", i, ": ", mt, "-", est, "-", disc)), file="minet-to-run.txt", append=T)
+			utils::capture.output(print(paste0("Iteration-", i, ": ", mt, "-", est, "-", disc)), file="minet-to-run.txt", append=TRUE)
 			#print("Before Updating text")
 			#if (is.function(updateProgress)){
 			#	text <- paste("MINET: ", mt, "-", est, "-", disc, "-", sep="")
@@ -145,13 +145,13 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 
 			ptm <- proc.time()
 			miMat <- minet::minet(stdGX, method=mt, estimator=est, disc=disc)
-			utils::capture.output(print(paste0("Iteration-", i, ", ", mt, "-", est, "-", disc, ": ", "MINET Execution Time - ", round(proc.time() - ptm)[3], " sec")), file="minet-completed.txt", append=T)
+			utils::capture.output(print(paste0("Iteration-", i, ", ", mt, "-", est, "-", disc, ": ", "MINET Execution Time - ", round(proc.time() - ptm)[3], " sec")), file="minet-completed.txt", append=TRUE)
 			#capture.output(print(proc.time() - ptm), file="minet-log.txt", append=T)
 			miMatName <- paste(mt,est,disc,sep="__")
 		}
 		out.list <- list("mat"=miMat, "name"=miMatName)
 	}
-	utils::capture.output(print("For Each Finished, Stopping Cluster..."), file="minet-log.txt", append=T)
+	utils::capture.output(print("For Each Finished, Stopping Cluster..."), file="minet-log.txt", append=TRUE)
 	parallel::stopCluster(cl)
 
 	for(i in 1:length(out.tmp.list)){
@@ -231,13 +231,13 @@ get_ranked_consensus_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=
 		mat_ll[[mthd]] <- calculate_correlation_matrix(gx_table=gx_table, iMethods=mthd, iEst=iEst, iDisc=iDisc, ncores=ncores)
 
 		print(paste0("Get ranked edges for method : ", mthd))
-		mat_ll[[mthd]][lower.tri(mat_ll[[mthd]], diag=T)] <- NA
+		mat_ll[[mthd]][lower.tri(mat_ll[[mthd]], diag=TRUE)] <- NA
 			
 		edge_df <- as.data.frame(as.table(mat_ll[[mthd]]))
 		edge_df <- edge_df[-which(is.na(edge_df$Freq)),]
-		edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), weight=edge_df$Freq, stringsAsFactors=F)
+		edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), weight=edge_df$Freq, stringsAsFactors=FALSE)
 
-		ranked_edges_ll[[mthd]] <- edge_df[order(edge_df$weight, decreasing=T), "edge"]
+		ranked_edges_ll[[mthd]] <- edge_df[order(edge_df$weight, decreasing=TRUE), "edge"]
 	}
 
         if (is.function(updateProgress)) {
@@ -309,13 +309,13 @@ parse_edge_rank_matrix <- function(edge_rank_matrix, debug_output=FALSE, updateP
 
         print("Getting edge list ordered by rank...")
         rank_martrx <- edge_rank_matrix
-        rank_martrx[lower.tri(rank_martrx, diag=T)] <- NA
+        rank_martrx[lower.tri(rank_martrx, diag=TRUE)] <- NA
         edge_df <- as.data.frame(as.table(rank_martrx))
         edge_df <- edge_df[-which(is.na(edge_df$Freq)),]
-        edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), rank=edge_df$Freq, stringsAsFactors=F)
+        edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), rank=edge_df$Freq, stringsAsFactors=FASLE)
         edge_df <- edge_df[which(edge_df$rank>0),]
         #edge_rank <- edge_df$edge[order(edge_df$rank, decreasing=T)]
-        edge_rank <- edge_df$edge[order(edge_df$rank, decreasing=F)]
+        edge_rank <- edge_df$edge[order(edge_df$rank, decreasing=FALSE)]
 
         res_ll <- list(bin_mat=bin_mat, edge_rank=edge_rank)
 
@@ -867,7 +867,7 @@ get_jaccard_sim <- function(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg
                 ont_ids2 <- as.character(ont2[which(ont2$GOID %in% GODB_vals_ll[[typ]]$GOID), "GOID"])
 
 		scoreMat <- GOSemSim::mgoSim(ont_ids1, ont_ids2, semData=d, measure="Rel", combine=NULL)
-		scoreDF <- as.data.frame(as.table(scoreMat), stringsAsFactors=F)
+		scoreDF <- as.data.frame(as.table(scoreMat), stringsAsFactors=FALSE)
 		idx <- which(scoreDF[,3]>=simThr)
 		if(length(idx)>0){
 			simID <- unique(c(scoreDF[idx,1], scoreDF[idx,2]))
@@ -1234,7 +1234,7 @@ go_summarization <- function(enriched_GO_DF, score_col="EASE_Score", annDB="org.
 
 		cut_height <- 0.9
 		simClust_cut <- stats::cutree(simClust, h = cut_height)
-		simClust_DF[[typ]] <- data.frame(ID=character(), TERM=character(), Score=integer(), Representative=character(), stringsAsFactors=F)
+		simClust_DF[[typ]] <- data.frame(ID=character(), TERM=character(), Score=integer(), Representative=character(), stringsAsFactors=FALSE)
 		
 		for(i in unique(simClust_cut)){
 			memberIDs <- names(simClust_cut[simClust_cut == i])
@@ -1243,7 +1243,7 @@ go_summarization <- function(enriched_GO_DF, score_col="EASE_Score", annDB="org.
 			#localDF <- data.frame(ID=memberIDs, TERM=selRow$TERM, Score=selRow$Score, Representative=clustID, stringsAsFactors=F)
 			selRow <- ont[which(ont$GOID %in% memberIDs), c("TERM", score_col)]
                         clustID <- selRow[which.max(selRow[,score_col]), "TERM"]
-			localDF <- data.frame(ID=memberIDs, TERM=selRow$TERM, Score=selRow[,score_col], Representative=clustID, stringsAsFactors=F)
+			localDF <- data.frame(ID=memberIDs, TERM=selRow$TERM, Score=selRow[,score_col], Representative=clustID, stringsAsFactors=FALSE)
 			simClust_DF[[typ]] <- rbind(simClust_DF[[typ]], localDF)
 		}
 		print(paste0("###### Completed CLustering For Ontology - ", typ, ' ######'))
