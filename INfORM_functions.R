@@ -312,7 +312,7 @@ parse_edge_rank_matrix <- function(edge_rank_matrix, debug_output=FALSE, updateP
         rank_martrx[lower.tri(rank_martrx, diag=TRUE)] <- NA
         edge_df <- as.data.frame(as.table(rank_martrx))
         edge_df <- edge_df[-which(is.na(edge_df$Freq)),]
-        edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), rank=edge_df$Freq, stringsAsFactors=FASLE)
+        edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), rank=edge_df$Freq, stringsAsFactors=FALSE)
         edge_df <- edge_df[which(edge_df$rank>0),]
         #edge_rank <- edge_df$edge[order(edge_df$rank, decreasing=T)]
         edge_rank <- edge_df$edge[order(edge_df$rank, decreasing=FALSE)]
