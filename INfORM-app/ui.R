@@ -138,7 +138,7 @@ dashboardPage(
 							h4("Select Parameters to Run MINET (Mutual Information NETworks)"),
 							wellPanel(
 								fluidRow(
-									column(12,
+									column(6,
 									    #uiOutput("selMethod"),
 									    #uiOutput("selEst"),
 									    #uiOutput("selDisc")
@@ -187,6 +187,25 @@ dashboardPage(
                                                                                             "globalequalwidth"
                                                                                     )
                                                                             )
+									),column(6,
+										fluidRow(
+											column(12,
+												selectInput("selEdge", "Edge Selection Strategy",
+													choices=c("default", "top"),
+													multiple=FALSE,
+													selected="default",
+												)
+											)
+										),fluidRow(
+											column(12,
+												numericInput("topCutOff", "Top 'n' Percent Edges",
+													value=10,
+													min=1,
+													max=100,
+													step=1
+												)
+											)
+										)
 									)
 								)
 							),fluidRow(
@@ -238,9 +257,10 @@ dashboardPage(
 				id="display", title="Display Area", width=12,
 				tabPanel(value="corMat_display", title="Adjacency Matrix", 
 					fluidRow(
-						valueBoxOutput('totalGeneBox'),
-						valueBoxOutput('connGeneBox'),
-						valueBoxOutput('unGeneBox')
+						valueBoxOutput('totalGeneBox', width=3),
+						valueBoxOutput('connGeneBox', width=3),
+						valueBoxOutput('unGeneBox', width=3),
+						valueBoxOutput('netDensityBox', width=3)
 					),fluidRow(
 						column(12,
 							fluidRow(
@@ -253,7 +273,9 @@ dashboardPage(
 									downloadButton('downloadUnGenes', label='Download Un-Connected Genes List')
 								)
 							),fluidRow(
-								tableOutput('unGeneList')
+								column(4,
+									tableOutput('unGeneList')
+								)
 							)
 						)
 					)
@@ -343,7 +365,7 @@ dashboardPage(
 										column(6,numericInput("eWidth", "Edge Width", value="5", width="100%")),
 										column(6,colourpicker::colourInput("bgCol", "Background Color", value="white"))
 									),fluidRow(
-										column(6,numericInput("dDepth", "Depth of Highlighting Nearest Nodes", value="2", width="100%"))
+										column(6,numericInput("dDepth", "Depth of Highlighting Nearest Nodes", value="1", width="100%"))
 									)
 								)
 							)

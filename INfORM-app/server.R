@@ -366,10 +366,8 @@ shinyServer(
                                 progress$set(message="Inference", value=0)
 
                                 ##corMat <- get_ranked_consensus_binary_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
-                                #resL <- get_ranked_consensus_binary_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
-                                #corMat <- resL[["bin_mat"]]
-                                #edgeRank <- resL[["edge_rank"]]
-                                rankMat <- get_ranked_consensus_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
+                                #rankMat <- get_ranked_consensus_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
+                                rankMat <- get_ranked_consensus_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, edge_selection_strategy=input$selEdge, topN=input$topCutOff, debug_output=FALSE, updateProgress=updateProgress)
                                 resL <- parse_edge_rank_matrix(rankMat)
                                 corMat <- resL[["bin_mat"]]
                                 edgeRank <- resL[["edge_rank"]]
@@ -434,6 +432,12 @@ shinyServer(
                         print(vcount(localIGraph))
                         print(ecount(localIGraph))
 
+                        #Setting edge attribute rank
+                        edgeIDs <- igraph::ends(localIGraph, igraph::E(localIGraph), names=TRUE)
+			igraph::edge_attr(localIGraph, name="rank") <- apply(edgeIDs, 1, function(x) {
+				rankMat[x[1],x[2]]
+			})
+
                         print("Setting DGX values as 'score'")
                         ###vertex_attr(localIGraph, name="score") <- localDgxTable[V(localIGraph)$name,]
 			##pval <- localDgxTable[V(localIGraph)$name,"P.Value"]
@@ -479,6 +483,14 @@ shinyServer(
 
                         modules <- get_modules(iGraph=localIGraph, method=modMethod)
 			modulesCount <- sum(sizes(modules)>=minModSize)
+			print("modulesCount")
+			print(modulesCount)
+			if(modulesCount==0){
+                                        shinyjs::info(paste0("No modules detected by ", modMethod, "!\n\n",
+					"Please adjust MINET setup and module detection parameters and rerun!"
+					))
+                                        return(NULL)
+			}
 			modPalette <- setNames(randomcoloR::distinctColorPalette(modulesCount), paste0(modMethod, "_", c(1:modulesCount)))
 			members <- membership(modules)
 
@@ -674,7 +686,7 @@ shinyServer(
 			}
 			
 			shinydashboard::valueBox(
-				paste0(geneCount), "Total Genes", icon=icon("list")
+				paste0(geneCount), "Total Genes", icon=icon("list"), color="light-blue", width=3
 			)
 		})
 
@@ -688,7 +700,7 @@ shinyServer(
 			}
                         
 			shinydashboard::valueBox(
-				paste0(connectedGeneCount), "Connected Genes", icon=icon("thumbs-o-up"), color="green"
+				paste0(connectedGeneCount), "Connected Genes", icon=icon("thumbs-o-up"), color="olive", width=3
 			)
 		})
 
@@ -704,7 +716,20 @@ shinyServer(
 			}
                         
 			shinydashboard::valueBox(
-				paste0(unConnectedGeneCount), "Un-connected Genes", icon=icon("thumbs-o-down"), color="red"
+				paste0(unConnectedGeneCount), "Un-connected Genes", icon=icon("thumbs-o-down"), color="red", width=3
+			)
+		})
+
+		output$netDensityBox <- shinydashboard::renderValueBox({
+			if(is.null(myValues$iGraph)){
+				netDensity <- "NA"
+			}
+			else{
+			    	netDensity <- paste0(round(igraph::graph.density(myValues$iGraph)*100, 2), "%")
+			}
+                        
+			shinydashboard::valueBox(
+				netDensity, "Network Density", icon=icon("area-chart"), color="purple", width=3
 			)
 		})
 
@@ -756,6 +781,7 @@ shinyServer(
 				shinyjs::enable("est")
 				shinyjs::enable("disc")
 				shinyjs::enable("cores")
+				shinyjs::enable("selEdge")
 			}
 			else{
 				shinyjs::disable("calcMat")
@@ -763,6 +789,7 @@ shinyServer(
 				shinyjs::disable("est")
 				shinyjs::disable("disc")
 				shinyjs::disable("cores")
+				shinyjs::disable("selEdge")
 			}
 
                         if(is.null(input$gx) || is.null(input$dgx)){
@@ -790,6 +817,14 @@ shinyServer(
 				shinyjs::enable("sepT")
 			}else{
 				shinyjs::disable("sepT")
+			}
+
+			if(input$selEdge=="default"){
+				shinyjs::disable("topCutOff")
+                                shinyjs::hide(id="topCutOff", anim=TRUE)
+			}else{
+				shinyjs::enable("topCutOff")
+                                shinyjs::show(id="topCutOff", anim=TRUE)
 			}
 
                         if(is.null(myValues$modules)){
@@ -1029,6 +1064,7 @@ shinyServer(
 
 			progress$set(message="Formatting Modules Graph...", value=0)
 			mods <- input$mod
+			localGxTable <- myValues$gxTable()
 
 			if(is.null(mods))
 			return(NULL)
@@ -1037,10 +1073,15 @@ shinyServer(
                                 localIGraph <- igraph:::union.igraph(myValues$modules_ll[["ig"]][mods])
                                 vAttrNames <- list.vertex.attributes(myValues$modules_ll[["ig"]][[1]])[-1]
                                 eAttrNames <- list.edge.attributes(myValues$modules_ll[["ig"]][[1]])
+                                #print("vAttrNames")
+                                #print(vAttrNames)
+                                #print("eAttrNames")
+                                #print(eAttrNames)
                                 localIGraph <- resolve_ig_union_attrs(localIGraph, vAttrNames, eAttrNames)
                         }else{
                                 localIGraph <- myValues$modules_ll[["ig"]][[mods[1]]]
                         }
+                        localIGraph <- set_edge_color(localIGraph, localGxTable, pos_cor_color=input$eColP, pos_cor_highlight_color=input$ehColP, neg_cor_color=input$eColN, neg_cor_highlight_color=input$ehColN)
                         modPalette <- myValues$modPalette
                         modVec <- igraph::vertex_attr(localIGraph, name="group")
                         #mods <- unique(modVec)
@@ -1139,7 +1180,12 @@ shinyServer(
                                 need(!is.null(myValues$modules_rank_table), "Waiting for module detection...")
                         )
 			rank_table <- myValues$modules_rank_table
-			radarchart::chartJSRadar(scores=rank_table[,c(-1)], labs=rownames(rank_table), labelSize=36, polyAlpha=0.3, lineAlpha=0.9, gridLines.lineWidth=10, pointLabels.fontSize=20)
+			if(nrow(rank_table)<3){
+				rank_table <- as.data.frame(t(rank_table[,-1]))
+			}else{
+				rank_table <- rank_table[,c(-1)]
+			}
+			radarchart::chartJSRadar(scores=rank_table, labs=rownames(rank_table), labelSize=36, polyAlpha=0.3, lineAlpha=0.9, gridLines.lineWidth=10, pointLabels.fontSize=20)
 		})
 
                 ##Module Optimization Radar Chart
@@ -1271,6 +1317,9 @@ shinyServer(
 		output$simHeatmap <- renderPlot({
                         shiny::validate(
                                 need(!is.null(myValues$within_go_sim), "Waiting for module detection...")
+                        )
+                        shiny::validate(
+                                need(nrow(myValues$within_go_sim)>1, "No Heatmap to plot for single module!")
                         )
 			#modMethod <- input$modMethod
 			#modules_ll <- myValues$modules_ll

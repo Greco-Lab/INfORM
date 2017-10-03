@@ -197,6 +197,8 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 #' @param iEst Vector of valid correlation methods for MINET package.
 #' @param iDisc Vector of valid discretization methods for MINET package.
 #' @param ncores Number of cores for running instances of MINET in parallel default:2.
+#' @param edge_selection_strategy How to select top ranked edges default:default. By default selectis top edges until all the nodes have at least one edge.
+#' @param topN Top n percentage edges to select if edge_selection_strategy is 'top' default:10.
 #' @param debug_output Print help and status messages to help debug the running of the function default:FALSE.
 #' @param updateProgress Shiny application can request for update of progress from this function default:NULL.
 #' @return A symmetrix matrix with median edge ranks representing the edge rank based consensus from different inference algorithms.
@@ -207,13 +209,15 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 #' iEst=c("pearson","spearman","kendall","mi.empirical","mi.mm","mi.shrink","mi.sg"),
 #' iDisc=c("none","equalfreq","equalwidth","globalequalwidth"),
 #' ncores=12,
+#' edge_selection_strategy="default",
+#' topN=10,
 #' debug_output=TRUE
 #' )
 #' }
 #' @keywords internal
 #' @export
 #get_ranked_consensus_binary_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, debug_output=FALSE, updateProgress=NULL){
-get_ranked_consensus_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, debug_output=FALSE, updateProgress=NULL){
+get_ranked_consensus_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, edge_selection_strategy="default", topN=10, debug_output=FALSE, updateProgress=NULL){
 	mat_ll <- list()
     	ranked_edges_ll <- list()
 
@@ -253,24 +257,37 @@ get_ranked_consensus_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=
 	rank_mat <- mat_ll[[1]]
 	rank_mat[,] <- 0
 
-	input_genes <- dim(gx_table)[1]
-	genes <- NULL
-	total_genes <- 0
 	median_list <- borda_res$TopK$median
-        cutoffIdx <- NULL
-	for(i in c(1:length(median_list))){
-		if(total_genes<input_genes){
-			local_genes <- strsplit(median_list[i], ";")[[1]]
-			#bin_mat[local_genes[1],local_genes[2]] <- 1
-			#bin_mat[local_genes[2],local_genes[1]] <- 1
-			rank_mat[local_genes[1],local_genes[2]] <- i
-		        rank_mat[local_genes[2],local_genes[1]] <- i
-			genes[local_genes[1]] <- 1
-			genes[local_genes[2]] <- 1
-			total_genes <- length(genes)
-		}else{
-                        cutoffIdx <- i-1
-			break
+	if(edge_selection_strategy=="default"){
+		input_genes <- dim(gx_table)[1]
+		genes <- NULL
+		total_genes <- 0
+		cutoffIdx <- NULL
+		for(i in c(1:length(median_list))){
+			if(total_genes<input_genes){
+				local_genes <- strsplit(median_list[i], ";")[[1]]
+				#bin_mat[local_genes[1],local_genes[2]] <- 1
+				#bin_mat[local_genes[2],local_genes[1]] <- 1
+				rank_mat[local_genes[1],local_genes[2]] <- i
+				rank_mat[local_genes[2],local_genes[1]] <- i
+				genes[local_genes[1]] <- 1
+				genes[local_genes[2]] <- 1
+				total_genes <- length(genes)
+			}else{
+				cutoffIdx <- i-1
+				break
+			}
+		}
+	}else if(edge_selection_strategy=="top"){
+		cutOff <- round((as.numeric(topN)*length(median_list))/100)
+		for(i in c(1:length(median_list))){
+			if(i<=cutOff){
+				local_genes <- strsplit(median_list[i], ";")[[1]]
+				rank_mat[local_genes[1],local_genes[2]] <- i
+				rank_mat[local_genes[2],local_genes[1]] <- i
+			}else{
+				break
+			}
 		}
 	}
         #edge_rank <- median_list[c(1:cutoffIdx)]
@@ -405,7 +422,7 @@ annotate_iGraph <- function(iG){
 
 #' Set general vertex colors and also colors to highlight the identified important vertices.
 #'
-#' @importFrom igraph vertex_attr
+#' @importFrom igraph vertex_attr V
 #' @importFrom stats quantile
 #'
 #' @param iGraph igraph object created from the binary consensus matrix computed by using get_ranked_consensus_binary_matrix() function.
@@ -433,20 +450,44 @@ annotate_iGraph <- function(iG){
 #' @keywords internal
 #' @export
 set_vertex_color <- function(iGraph, gx_data_table, dgx_table, pos_cor_color="salmon", pos_cor_highlight_color="red", neg_cor_color="lightblue", neg_cor_highlight_color="royalblue", pos_perc=0.95, neg_perc=0.05){
-        dgx_table <- as.matrix(dgx_table)
-        posCor <- rownames(dgx_table)[which(dgx_table[,1]>= stats::quantile(as.vector(dgx_table), pos_perc))]
-        negCor <- rownames(dgx_table)[which(dgx_table[,1]<= stats::quantile(as.vector(dgx_table), neg_perc))]
-
-        col_length <- length(rownames(dgx_table))
+	#Intitialize color vectors
+        col_length <- vcount(iGraph)
         color_vector <- rep("lightgrey", col_length)
         highlight_color_vector <- rep("darkgrey", col_length)
+	vNames <- igraph::V(iGraph)$name
+	if("score" %in% list.vertex.attributes(iGraph))
+	{
+		posCor <- vNames[which(igraph::V(iGraph)$score>=stats::quantile(igraph::V(iGraph)$score, pos_perc))]
+		negCor <- vNames[which(igraph::V(iGraph)$score<=stats::quantile(igraph::V(iGraph)$score, neg_perc))]
+	}
+	else{
+		dgx_table <- as.matrix(dgx_table)
+		dgx_table <- dgx_table[vNames,]
+		scoreColIdx <- NULL
+		if("score" %in% colnames(dgx_table)){
+			scoreColIdx <- which(colnames(dgx_table)=="score")
+		}else if(any(c("lfc", "logfc", "log.fc", "log-fc") %in% tolower(colnames(dgx_table)))){
+			scoreColIdx <- which(tolower(colnames(dgx_table))%in%c("lfc", "logfc", "log.fc", "log-fc"))
+		}else{
+			if(ncol(dgx_table)>=2){
+				scoreColIdx <- 2
+			}else{
+				scoreColIdx <- 1
+			}
+		}
+		posCor <- rownames(dgx_table)[which(dgx_table[,scoreColIdx]>= stats::quantile(as.vector(dgx_table[,scoreColIdx]), pos_perc))]
+		negCor <- rownames(dgx_table)[which(dgx_table[,scoreColIdx]<= stats::quantile(as.vector(dgx_table[,scoreColIdx]), neg_perc))]
+	}
+
         print("For Loop for populating vertex color vector...")
-        for(i in c(which(is.element(rownames(gx_data_table),posCor)))){
+        #for(i in c(which(is.element(rownames(gx_data_table),posCor)))){
+        for(i in c(which(is.element(vNames,posCor)))){
                 color_vector[i] <- pos_cor_color
                 highlight_color_vector[i] <- pos_cor_highlight_color
         }
 
-        for(i in c(which(is.element(rownames(gx_data_table),negCor)))){
+        #for(i in c(which(is.element(rownames(gx_data_table),negCor)))){
+        for(i in c(which(is.element(vNames,negCor)))){
                 color_vector[i] <- neg_cor_color
                 highlight_color_vector[i] <- neg_cor_highlight_color
         }
@@ -492,7 +533,14 @@ set_edge_color <- function(iGraph, gx_data_table, pos_cor_color="salmon", pos_co
 	matColor <- ifelse(corGX<=0, neg_cor_color, pos_cor_color)
 	matHighlightColor <- ifelse(corGX<=0, neg_cor_highlight_color, pos_cor_highlight_color)
 
-	edgeIDs <- igraph::get.edges(iGraph, igraph::E(iGraph))
+	#edgeIDs <- igraph::get.edges(iGraph, igraph::E(iGraph))
+	edgeIDs <- igraph::ends(iGraph, igraph::E(iGraph), names=TRUE)
+        #print("edgeIDs")
+        #print(edgeIDs)
+        cols <- apply(edgeIDs, 1, function(x) {
+		matColor[x[1],x[2]]
+	})
+        #print(cols)
 
 	igraph::edge_attr(iGraph, name="color") <- apply(edgeIDs, 1, function(x) {
 		matColor[x[1],x[2]]
@@ -1489,7 +1537,7 @@ resolve_ig_union_attrs <- function(ig_union, vertex_attr_names, edge_attr_names)
 	
 	#Remove redundant attributes
 	for(nm in colIdxNames){
-		#print(paste0("Removing Attr : " , nm))
+		print(paste0("Removing Attr : " , nm))
 		ig_union <- igraph::delete_edge_attr(ig_union, nm)
 	}
 	return(ig_union)
