@@ -217,32 +217,76 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 #' @keywords internal
 #' @export
 #get_ranked_consensus_binary_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, debug_output=FALSE, updateProgress=NULL){
-get_ranked_consensus_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, edge_selection_strategy="default", topN=10, debug_output=FALSE, updateProgress=NULL){
+get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL, iDisc=NULL, ncores=2, matList=NULL, mat_weights="rank", ensemble_strategy="minet", debug_output=FALSE, updateProgress=NULL){
 	mat_ll <- list()
     	ranked_edges_ll <- list()
 
-	mthdCount <- 1
-	totalMthds <- length(iMethods)+1
-	for(mthd in iMethods){
-		if (is.function(updateProgress)) {
-			text <- paste0("'", mthd, "' Median")
-			value <- mthdCount / totalMthds
-			updateProgress(detail = text, value = value)
-		}
-		mthdCount <- mthdCount + 1
+        if(length(grep("minet" ,ensemble_strategy))>0){
+                mthdCount <- 1
+                totalMthds <- length(iMethods)+1
+                for(mthd in iMethods){
+                        if (is.function(updateProgress)) {
+                                text <- paste0("'", mthd, "' Median")
+                                value <- mthdCount / totalMthds
+                                updateProgress(detail = text, value = value)
+                        }
+                        mthdCount <- mthdCount + 1
 
-		print(paste0("Calculate correlation matrix for method : ", mthd))
-		mat_ll[[mthd]] <- calculate_correlation_matrix(gx_table=gx_table, iMethods=mthd, iEst=iEst, iDisc=iDisc, ncores=ncores)
+                        print(paste0("Calculate correlation matrix for method : ", mthd))
+                        mat_ll[[mthd]] <- calculate_correlation_matrix(gx_table=gx_table, iMethods=mthd, iEst=iEst, iDisc=iDisc, ncores=ncores)
 
-		print(paste0("Get ranked edges for method : ", mthd))
-		mat_ll[[mthd]][lower.tri(mat_ll[[mthd]], diag=TRUE)] <- NA
-			
-		edge_df <- as.data.frame(as.table(mat_ll[[mthd]]))
-		edge_df <- edge_df[-which(is.na(edge_df$Freq)),]
-		edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), weight=edge_df$Freq, stringsAsFactors=FALSE)
+                        print(paste0("Get ranked edges for method : ", mthd))
+                        mat_ll[[mthd]][lower.tri(mat_ll[[mthd]], diag=TRUE)] <- NA
+                                
+                        edge_df <- as.data.frame(as.table(mat_ll[[mthd]]))
+                        print("Minet edge_df before:")
+                        print(str(edge_df))
+                        edge_df <- edge_df[-which(is.na(edge_df$Freq)),]
+                        edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), weight=edge_df$Freq, stringsAsFactors=FALSE)
+                        print("Minet edge_df after:")
+                        print(str(edge_df))
 
-		ranked_edges_ll[[mthd]] <- edge_df[order(edge_df$weight, decreasing=TRUE), "edge"]
-	}
+                        ranked_edges_ll[[mthd]] <- edge_df[order(edge_df$weight, decreasing=TRUE), "edge"]
+                }
+        }
+
+        if(length(grep("user", ensemble_strategy))>0){
+                matList <- as.list(matList)
+                for(i in c(1:length(matList))){
+                        itmName <- paste0("user_", i)
+                        matList[[i]][lower.tri(matList[[i]], diag=TRUE)] <- NA
+                                
+                        edge_df <- as.data.frame(as.table(matList[[i]]))
+                        print("User edge_df before:")
+                        print(str(edge_df))
+                        edge_df <- edge_df[-which(is.na(edge_df$Freq)),]
+                        edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), weight=edge_df$Freq, stringsAsFactors=FALSE)
+                        hasNulls <- FALSE
+                        if(mat_weights=="rank"){
+                                nullIdx <- which(edge_df$weight==0)
+                                if(length(nullIdx)>0){
+                                        edge_df_null <- edge_df[nullIdx,]
+                                        edge_df <- edge_df[-nullIdx,]
+                                        hasNulls <- TRUE
+                                }
+                        }
+                        print("User edge_df after:")
+                        print(str(edge_df))
+
+                        ordOption <- ifelse(mat_weights=="rank", FALSE, TRUE)
+                        print(paste0("ordOption : ", ordOption))
+                        edge_df <- edge_df[order(edge_df$weight,decreasing=ordOption),]
+                        if(hasNulls){
+                                edge_df <- as.data.frame(rbind(edge_df, edge_df_null), stringsAsFactors=FALSE)
+                        }
+                        #ranked_edges_ll[[itmName]] <- edge_df[order(edge_df$weight, decreasing=ordOption), "edge"]
+                        ranked_edges_ll[[itmName]] <- edge_df$edge
+                }
+        }
+        print("ranked_edges_ll:")
+        print(length(ranked_edges_ll))
+        print(names(ranked_edges_ll))
+        print(lapply(ranked_edges_ll, length))
 
         if (is.function(updateProgress)) {
 	    updateProgress(detail = "Consensus Binary", value = 1)
@@ -250,52 +294,63 @@ get_ranked_consensus_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=
 
 	print("Perform Borda on list of list of ranked edges.")
 	borda_res <- TopKLists::Borda(ranked_edges_ll)
+        Borda.plot(borda_res)
 
 	print("Get a consensus binary matrix by selecting the most significant ranked edges from median rank of Borda result.")
-	#bin_mat <- mat_ll[[1]]
-	#bin_mat[,] <- 0
-	rank_mat <- mat_ll[[1]]
+        if(length(mat_ll)>0){
+	        rank_mat <- mat_ll[[1]]
+        }else{
+                rank_mat <- matList[[1]]
+        }
 	rank_mat[,] <- 0
+        print("rank_mat")
+        print(dim(rank_mat))
 
 	median_list <- borda_res$TopK$median
-	if(edge_selection_strategy=="default"){
-		input_genes <- dim(gx_table)[1]
-		genes <- NULL
-		total_genes <- 0
-		cutoffIdx <- NULL
-		for(i in c(1:length(median_list))){
-			if(total_genes<input_genes){
-				local_genes <- strsplit(median_list[i], ";")[[1]]
-				#bin_mat[local_genes[1],local_genes[2]] <- 1
-				#bin_mat[local_genes[2],local_genes[1]] <- 1
-				rank_mat[local_genes[1],local_genes[2]] <- i
-				rank_mat[local_genes[2],local_genes[1]] <- i
-				genes[local_genes[1]] <- 1
-				genes[local_genes[2]] <- 1
-				total_genes <- length(genes)
-			}else{
-				cutoffIdx <- i-1
-				break
-			}
-		}
-	}else if(edge_selection_strategy=="top"){
-		cutOff <- round((as.numeric(topN)*length(median_list))/100)
-		for(i in c(1:length(median_list))){
-			if(i<=cutOff){
-				local_genes <- strsplit(median_list[i], ";")[[1]]
-				rank_mat[local_genes[1],local_genes[2]] <- i
-				rank_mat[local_genes[2],local_genes[1]] <- i
-			}else{
-				break
-			}
-		}
-	}
-        #edge_rank <- median_list[c(1:cutoffIdx)]
-        #res_ll <- list(bin_mat=bin_mat, edge_rank=edge_rank)
+        #Kendall.plot(ranked_edges_ll, median_list)
 
-	#print("Binary matrix computed, returning!")
-	#return(bin_mat)
-	#return(res_ll)
+	#if(edge_selection_strategy=="default"){
+	#	#input_genes <- dim(gx_table)[1]
+	#	input_genes <- nrow(rank_mat)
+	#	genes <- NULL
+	#	total_genes <- 0
+	#	cutoffIdx <- NULL
+	#	for(i in c(1:length(median_list))){
+	#		if(total_genes<input_genes){
+	#			local_genes <- strsplit(median_list[i], ";")[[1]]
+	#			rank_mat[local_genes[1],local_genes[2]] <- i
+	#			rank_mat[local_genes[2],local_genes[1]] <- i
+	#			genes[local_genes[1]] <- 1
+	#			genes[local_genes[2]] <- 1
+	#			total_genes <- length(genes)
+	#		}else{
+	#			cutoffIdx <- i-1
+	#			break
+	#		}
+	#	}
+	#}else if(edge_selection_strategy=="top"){
+	#	cutOff <- round((as.numeric(topN)*length(median_list))/100)
+	#	for(i in c(1:length(median_list))){
+	#		if(i<=cutOff){
+	#			local_genes <- strsplit(median_list[i], ";")[[1]]
+	#			rank_mat[local_genes[1],local_genes[2]] <- i
+	#			rank_mat[local_genes[2],local_genes[1]] <- i
+	#		}else{
+	#			break
+	#		}
+	#	}
+	#}
+
+        print("median_list:")
+        print(str(median_list))
+        print(length(median_list))
+        print(head(median_list))
+        for(i in c(1:length(median_list))){
+                local_genes <- strsplit(median_list[i], ";")[[1]]
+                rank_mat[local_genes[1],local_genes[2]] <- i
+                rank_mat[local_genes[2],local_genes[1]] <- i
+        }
+
 	print("Rank matrix computed, returning!")
 	return(rank_mat)
 }
@@ -316,23 +371,65 @@ get_ranked_consensus_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=
 #' }
 #' @keywords internal
 #' @export
-parse_edge_rank_matrix <- function(edge_rank_matrix, debug_output=FALSE, updateProgress=NULL){
+parse_edge_rank_matrix <- function(edge_rank_matrix, edge_selection_strategy="default", mat_weights="rank", topN=10, debug_output=FALSE, updateProgress=NULL){
         bin_mat <- edge_rank_matrix
-        idx <- which(bin_mat>0)
-        if(length(idx)>0){
-                print("Creating binary matrix...")
-                bin_mat[which(bin_mat>0)] <- 1
-        }
+        #idx <- which(bin_mat>0)
+        #if(length(idx)>0){
+        #        print("Creating binary matrix...")
+        #        bin_mat[which(bin_mat>0)] <- 1
+        #}
+        bin_mat[,] <- 0
 
         print("Getting edge list ordered by rank...")
-        rank_martrx <- edge_rank_matrix
-        rank_martrx[lower.tri(rank_martrx, diag=TRUE)] <- NA
-        edge_df <- as.data.frame(as.table(rank_martrx))
+        rank_matrix <- edge_rank_matrix
+        rank_matrix[lower.tri(rank_matrix, diag=TRUE)] <- NA
+        edge_df <- as.data.frame(as.table(rank_matrix))
         edge_df <- edge_df[-which(is.na(edge_df$Freq)),]
-        edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), rank=edge_df$Freq, stringsAsFactors=FALSE)
-        edge_df <- edge_df[which(edge_df$rank>0),]
-        #edge_rank <- edge_df$edge[order(edge_df$rank, decreasing=T)]
-        edge_rank <- edge_df$edge[order(edge_df$rank, decreasing=FALSE)]
+        edge_df <- data.frame(edge=paste0(edge_df$Var1,";",edge_df$Var2), weight=edge_df$Freq, stringsAsFactors=FALSE)
+        edge_df <- edge_df[which(edge_df$weight>0),]
+        ordOption <- ifelse(mat_weights=="rank", FALSE, TRUE)
+        print(paste0("ordOption : ", ordOption))
+        print(class(edge_df$weight))
+        edge_rank <- edge_df$edge[order(edge_df$weight, decreasing=ordOption)]
+        print(paste0("edge rank before:", length(edge_rank)))
+        print(head(edge_rank))
+
+	if(edge_selection_strategy=="default"){
+		#input_genes <- nrow(rank_matrix)
+                input_genes <- length(unique(unlist(strsplit(edge_rank, ";"))))
+                print(paste0("input genes : ", input_genes))
+		genes <- NULL
+		total_genes <- 0
+		cutoffIdx <- NULL
+		for(i in c(1:length(edge_rank))){
+			if(total_genes<input_genes){
+				local_genes <- strsplit(edge_rank[i], ";")[[1]]
+				bin_mat[local_genes[1],local_genes[2]] <- 1
+				bin_mat[local_genes[2],local_genes[1]] <- 1
+				genes[local_genes[1]] <- 1
+				genes[local_genes[2]] <- 1
+				total_genes <- length(genes)
+				cutoffIdx <- i
+			}else{
+                                print(paste0("Cutoff before break:", cutoffIdx))
+				break
+			}
+		}
+	}else if(edge_selection_strategy=="top"){
+		cutoffIdx <- round((as.numeric(topN)*length(edge_rank))/100)
+		for(i in c(1:length(edge_rank))){
+			if(i<=cutoffIdx){
+				local_genes <- strsplit(edge_rank[i], ";")[[1]]
+				bin_mat[local_genes[1],local_genes[2]] <- 1
+				bin_mat[local_genes[2],local_genes[1]] <- 1
+			}else{
+				break
+			}
+		}
+	}
+        print(paste0("Cutoff:", cutoffIdx))
+        edge_rank <- edge_rank[c(1:cutoffIdx)]
+        print(paste0("edge rank after:", length(edge_rank)))
 
         res_ll <- list(bin_mat=bin_mat, edge_rank=edge_rank)
 
@@ -712,6 +809,7 @@ get_modules <- function(iGraph, method="walktrap")
 #' @param rl.lfc Ordered ranked list of genes by Log FC obtained from differential expression analysis.
 #' @param rl.edge Ordered ranked list of edges obtained by taking median rank from Borda over ranked edges from matrices inferred by different algorithms.
 #' @param annDB Organism specific annotation library default:'org.Hs.eg.db'.
+#' @param p_value P.Value cutoff for the enriched GO terms default:0.05.
 #' @param min_mod_size Minimum module size to select modules for annotation and to be added in results; DEFAULT:10.
 #' @param prefix string to prefix module names; DEFAULT:NULL.
 #' @return list-of-list containing igraph objects, annotation enrichment and median values for vertice and edges by different rank lists in each module
@@ -725,13 +823,14 @@ get_modules <- function(iGraph, method="walktrap")
 #' rl.lfc,
 #' rl.edge,
 #' annDB="org.Hs.eg.db",
+#' p_value=0.05,
 #' min_mod_size=10,
 #' prefix=NULL
 #' )
 #' }
 #' @keywords internal
 #' @export
-annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv, rl.lfc, rl.edge, annDB="org.Hs.eg.db", min_mod_size=10, prefix=NULL){
+annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv, rl.lfc, rl.edge, annDB="org.Hs.eg.db", p_value=0.05, min_mod_size=10, prefix=NULL){
 	res_ll <- list()
 	res_ll[["names"]] <- igraph::communities(modules)
 
@@ -749,7 +848,8 @@ annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv, rl.lfc, rl.edge, 
 	res_ll[["ae"]] <- lapply(
 		res_ll[["names"]], function(x){
 			res <- annotation_enrichment(genelist=x, annDB=annDB)
-			res <- res[res$ease<=0.05,]
+			#res <- res[res$ease<=0.05,]
+			res <- res[res$ease<=p_value,]
 			if(nrow(res)==0)
 			return(NULL)
 		
@@ -876,14 +976,15 @@ get_jaccard <- function(set1, set2){
 #' @param simThr Threshold of semantic similarity score to consider items as similar; DEFAULT:0.6.
 #' @param IC_ll list-of-list containing GOSemSimDATA objects for BP, MF and CC.
 #' @param annDB Organism specific annotation library default:'org.Hs.eg.db'.
+#' @param semSimMeasure Sematic similarity measure option from GOSemSim package default:'Rel'.
 #' @return Numerical value between 0 and 1 representing the Jaccard similarity coefficient.
 #' @examples
 #' \dontrun{
-#' get_jaccard_sim(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg.db")
+#' get_jaccard_sim(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg.db", simMeasure="Rel")
 #' }
 #' @keywords internal
 #' @export
-get_jaccard_sim <- function(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg.db"){
+get_jaccard_sim <- function(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg.db", simMeasure="Rel"){
         if(is.null(set1) || is.null(set2))
         return(NULL)
         
@@ -914,7 +1015,7 @@ get_jaccard_sim <- function(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg
                 ont_ids1 <- as.character(ont1[which(ont1$GOID %in% GODB_vals_ll[[typ]]$GOID), "GOID"])
                 ont_ids2 <- as.character(ont2[which(ont2$GOID %in% GODB_vals_ll[[typ]]$GOID), "GOID"])
 
-		scoreMat <- GOSemSim::mgoSim(ont_ids1, ont_ids2, semData=d, measure="Rel", combine=NULL)
+		scoreMat <- GOSemSim::mgoSim(ont_ids1, ont_ids2, semData=d, measure=simMeasure, combine=NULL)
 		scoreDF <- as.data.frame(as.table(scoreMat), stringsAsFactors=FALSE)
 		idx <- which(scoreDF[,3]>=simThr)
 		if(length(idx)>0){
@@ -1239,14 +1340,14 @@ progressive_enrichment <- function(genelists, l1, l2, l3)
 #' score_col="EASE_Score",
 #' annDB="org.Hs.eg.db",
 #' simMeasure="Rel",
-#' treeHeight=9,
+#' treeHeight=0.9,
 #' IC_ll=NULL,
 #' log_transform=TRUE
 #' )
 #' }
 #' @keywords internal
 #' @export
-go_summarization <- function(enriched_GO_DF, score_col="EASE_Score", annDB="org.Hs.eg.db", simMeasure="Rel", treeHeight=9, IC_ll=NULL, log_transform=TRUE){
+go_summarization <- function(enriched_GO_DF, score_col="EASE_Score", annDB="org.Hs.eg.db", simMeasure="Rel", treeHeight=0.9, IC_ll=NULL, log_transform=TRUE){
 	GODB_vals = AnnotationDbi::select(GO.db, keys(GO.db, "GOID"), c("TERM", "ONTOLOGY"))
 	GODB_vals_ll <- list()
 	GODB_vals_ll[["BP"]] <- GODB_vals[GODB_vals$ONTOLOGY=="BP",c("GOID", "TERM")]
@@ -1272,7 +1373,7 @@ go_summarization <- function(enriched_GO_DF, score_col="EASE_Score", annDB="org.
 			d <- IC_ll[[typ]]
 		}
 
-		simsem_matrix <- GOSemSim::mgoSim(ont_ids, ont_ids, semData=d, measure="Rel", combine=NULL)
+		simsem_matrix <- GOSemSim::mgoSim(ont_ids, ont_ids, semData=d, measure=simMeasure, combine=NULL)
 		dim_len <- dim(simsem_matrix)[1]
 		#print(dim_len)
 		simsem_matrix_clean <- simsem_matrix[rowSums(is.na(simsem_matrix))!=dim_len, colSums(is.na(simsem_matrix))!=dim_len]
@@ -1280,8 +1381,8 @@ go_summarization <- function(enriched_GO_DF, score_col="EASE_Score", annDB="org.
 		
 		simClust <- stats::hclust(stats::as.dist(1-simsem_matrix))
 
-		cut_height <- 0.9
-		simClust_cut <- stats::cutree(simClust, h = cut_height)
+		cut_height <- treeHeight
+		simClust_cut <- stats::cutree(simClust, h=cut_height)
 		simClust_DF[[typ]] <- data.frame(ID=character(), TERM=character(), Score=integer(), Representative=character(), stringsAsFactors=FALSE)
 		
 		for(i in unique(simClust_cut)){

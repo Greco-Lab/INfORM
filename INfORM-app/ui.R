@@ -96,7 +96,7 @@ dashboardPage(
 			#		)
 			#	),fluidRow(
 					column(12,
-						h4("Upload Gene Expression Data"),
+						h4("Upload Data"),
 						wellPanel(
 							fluidRow(
 								column(4,
@@ -116,8 +116,31 @@ dashboardPage(
 									),
 									shinyBS::bsTooltip("import_dgx_submit", "Launch a graphical window, to configure import of differenatial expression data from a file!", placement="bottom")
 								),column(4,
-									fileInput(inputId="mat", label="Adjacency Matrix (Pre-Inferred with INfORM) [OPTIONAL]")
+                                                                        selectInput("ensembleStrat", "Choose Ensemble Strategy", 
+                                                                                choices=c("MINET Inference"="minet",
+                                                                                        "User Matrices"="user",
+                                                                                        "MINET Inference + User Matrices"="minet+user"
+                                                                                ), 
+                                                                                multiple=FALSE, 
+                                                                                selected="minet"
+                                                                        )
 								)
+							),fluidRow(
+								column(12,hidden(div(id="matOptions",
+                                                                        fluidRow(
+                                                                                column(4,
+                                                                                        fileInput(inputId="mat", label="User Provided Matrices", multiple=TRUE)
+                                                                                ),column(4,
+                                                                                        selectInput("matWeights", "Edge Weight Property", 
+                                                                                                choices=c("Ranks"="rank",
+                                                                                                        "Scores"="score"
+                                                                                                ), 
+                                                                                                multiple=FALSE, 
+                                                                                                selected="rank"
+                                                                                        )
+                                                                                )
+                                                                        )
+                                                                )))
 							)
 						)
 					)
@@ -135,119 +158,134 @@ dashboardPage(
 					column(12,
 						a(id = "showAdvancedOptions", "Show/Hide Advanced Options"),
 						hidden(div(id="advancedOptions",
-							h4("Select Parameters to Run MINET (Mutual Information NETworks)"),
-							wellPanel(
-								fluidRow(
-									column(6,
-									    #uiOutput("selMethod"),
-									    #uiOutput("selEst"),
-									    #uiOutput("selDisc")
-                                                                            selectInput("method", "Select Inference Algorithm", 
-                                                                                    choices=c("clr",
-                                                                                            "aracne",
-                                                                                            "mrnet",
-                                                                                            "mrnetb"
-                                                                                    ), 
-                                                                                    multiple=TRUE, 
-                                                                                    selected=c("clr",
-                                                                                            "aracne",
-                                                                                            "mrnet",
-                                                                                            "mrnetb"
-                                                                                    )
-                                                                            ),
-                                                                            selectInput("est", "Select Correlation", 
-                                                                                    choices=c("pearson",
-                                                                                            "spearman",
-                                                                                            "kendall",
-                                                                                            "mi.empirical",
-                                                                                            "mi.mm",
-                                                                                            "mi.shrink",
-                                                                                            "mi.sg"
-                                                                                    ), 
-                                                                                    multiple=TRUE, 
-                                                                                    selected=c("pearson",
-                                                                                            "spearman",
-                                                                                            "kendall",
-                                                                                            "mi.empirical",
-                                                                                            "mi.mm",
-                                                                                            "mi.shrink",
-                                                                                            "mi.sg"
-                                                                                    ) 
-                                                                            ),
-                                                                            selectInput("disc", "Select Discretization Method", 
-                                                                                    choices=c("none",
-                                                                                            "equalfreq",
-                                                                                            "equalwidth",
-                                                                                            "globalequalwidth"
-                                                                                    ), 
-                                                                                    multiple=TRUE, 
-                                                                                    selected=c("none",
-                                                                                            "equalfreq",
-                                                                                            "equalwidth",
-                                                                                            "globalequalwidth"
-                                                                                    )
-                                                                            )
-									),column(6,
-										fluidRow(
-											column(12,
-												selectInput("selEdge", "Edge Selection Strategy",
-													choices=c("default", "top"),
-													multiple=FALSE,
-													selected="default",
-												)
-											)
-										),fluidRow(
-											column(12,
-												numericInput("topCutOff", "Top 'n' Percent Edges",
-													value=10,
-													min=1,
-													max=100,
-													step=1
-												)
-											)
-										)
-									)
-								)
-							),fluidRow(
-								column(6,
-									h4("Configure Gene Ranking"),
-									wellPanel(
-										uiOutput("rankAttr") 
-									)
-								),column(6,
-									h4("Module Detection"),
-									wellPanel(
-										fluidRow(
-											column(4, 
-												selectInput("modMethod", "Method", 
-													choices=c(
-														"Walktrap"="walktrap",
-														"Spinglass"="spinglass",
-														"Louvain"="louvain",
-														"Greedy"="greedy"
-													), 
-													multiple=FALSE, 
-													selected="walktrap"
-												)
-											),column(4,
-												numericInput("minModSize", "Minimum Module Size",
-													value=10,
-													min=1,
-													max=NA,
-													step=1
-												)
-											),column(4,
-                                                                                                div(id="outerDgxDiv", class="form-group shiny-input-container",
-                                                                                                        tags$label(" "),
-                                                                                                        div(id="innerDgxDiv", class="input-group",
-                                                                                                                shinyBS::bsButton("runDetect", label="Detect Modules", style="danger", icon=icon("exclamation-circle"))
-                                                                                                        )
+                                                        fluidRow(column(6,
+                                                                h4("Select Parameters to Run MINET (Mutual Information NETworks)"),
+                                                                wellPanel(fluidRow(column(12,
+                                                                        #uiOutput("selMethod"),
+                                                                        #uiOutput("selEst"),
+                                                                        #uiOutput("selDisc")
+                                                                        selectInput("method", "Select Inference Algorithm", 
+                                                                                choices=c("clr",
+                                                                                        "aracne",
+                                                                                        "mrnet",
+                                                                                        "mrnetb"
+                                                                                ), 
+                                                                                multiple=TRUE, 
+                                                                                selected=c("clr",
+                                                                                        "aracne",
+                                                                                        "mrnet",
+                                                                                        "mrnetb"
+                                                                                )
+                                                                        ),
+                                                                        selectInput("est", "Select Correlation", 
+                                                                                choices=c("pearson",
+                                                                                        "spearman",
+                                                                                        "kendall",
+                                                                                        "mi.empirical",
+                                                                                        "mi.mm",
+                                                                                        "mi.shrink",
+                                                                                        "mi.sg"
+                                                                                ), 
+                                                                                multiple=TRUE, 
+                                                                                selected=c("pearson",
+                                                                                        "spearman",
+                                                                                        "kendall",
+                                                                                        "mi.empirical",
+                                                                                        "mi.mm",
+                                                                                        "mi.shrink",
+                                                                                        "mi.sg"
+                                                                                ) 
+                                                                        ),
+                                                                        selectInput("disc", "Select Discretization Method", 
+                                                                                choices=c("none",
+                                                                                        "equalfreq",
+                                                                                        "equalwidth",
+                                                                                        "globalequalwidth"
+                                                                                ), 
+                                                                                multiple=TRUE, 
+                                                                                selected=c("none",
+                                                                                        "equalfreq",
+                                                                                        "equalwidth",
+                                                                                        "globalequalwidth"
+                                                                                )
+                                                                        )
+                                                                )))
+                                                        ),column(6,
+                                                                h4("Configure Gene Ranking"),
+                                                                wellPanel(fluidRow(column(12,
+                                                                        uiOutput("rankAttr") 
+                                                                ))),
+                                                                h4("Module Detection"),
+                                                                wellPanel(fluidRow(column(12,
+                                                                        fluidRow(
+                                                                                column(4, 
+                                                                                        selectInput("modMethod", "Method", 
+                                                                                                choices=c(
+                                                                                                        "Walktrap"="walktrap",
+                                                                                                        "Spinglass"="spinglass",
+                                                                                                        "Louvain"="louvain",
+                                                                                                        "Greedy"="greedy"
+                                                                                                ), 
+                                                                                                multiple=FALSE, 
+                                                                                                selected="walktrap"
+                                                                                        )
+                                                                                ),column(4,
+                                                                                        numericInput("minModSize", "Minimum Module Size",
+                                                                                                value=10,
+                                                                                                min=1,
+                                                                                                max=NA,
+                                                                                                step=1
+                                                                                        )
+                                                                                ),column(4,
+                                                                                        div(id="outerDgxDiv", class="form-group shiny-input-container",
+                                                                                                tags$label(" "),
+                                                                                                div(id="innerDgxDiv", class="input-group",
+                                                                                                        shinyBS::bsButton("runDetect", label="Detect Modules", style="danger", icon=icon("exclamation-circle"))
                                                                                                 )
-											)
-										)
-									)
-								)
-							)
+                                                                                        )
+                                                                                )
+                                                                        )
+                                                                )))
+                                                        )),fluidRow(column(6,
+                                                                h4("Edge Selection For Final Ensemble"),
+                                                                wellPanel(fluidRow(column(6,
+                                                                        selectInput("selEdge", "Edge Selection Strategy",
+                                                                                choices=c("default", "top"),
+                                                                                multiple=FALSE,
+                                                                                selected="default",
+                                                                        )
+                                                                ),column(6,
+                                                                        numericInput("topCutOff", "Top 'n' Percent Edges",
+                                                                                value=10,
+                                                                                min=1,
+                                                                                max=100,
+                                                                                step=1
+                                                                        )
+                                                                )))
+                                                        ),column(6,
+                                                                h4("Gene Ontology Annotation Options"),
+                                                                wellPanel(fluidRow(column(4,
+                                                                        numericInput("sigPval", "Significanct P.Value",
+                                                                                value=0.05,
+                                                                                min=0.0000001,
+                                                                                max=0.1,
+                                                                                step=0.000001
+                                                                        )
+                                                                ),column(4,
+                                                                        selectInput("selSemSim", "Semantic Similarity Method",
+                                                                                choices=c("Rel", "Resnik", "Lin", "Jiang", "Wang"),
+                                                                                multiple=FALSE,
+                                                                                selected="Rel",
+                                                                        )
+                                                                ),column(4,
+                                                                        numericInput("treeHeight", "Cluster Tree Cut Height",
+                                                                                value=0.9,
+                                                                                min=0.1,
+                                                                                max=1,
+                                                                                step=0.05
+                                                                        )
+                                                                )))
+                                                        ))
 						))
 					)
 				)

@@ -231,46 +231,30 @@ shinyServer(
 
 		observeEvent(input$runINfORM, {
 			print("Run INfORM.....")
+                       
+                        if(input$ensembleStrat!="user"){
+                                if(is.null(myValues$method())){
+                                        shinyjs::info(paste0("No Inference Algorithm Selected!"))
+                                }
 
-                        #shiny::validate(
-			#	need(!is.null(myValues$gxTable()), "No Gene Expression Table Provided!")
-			#)
-                        #shiny::validate(
-			#	#need(!is.null(myValues$dgxTable()), "No Differential Expression Table Provided!")
-			#	need(!is.null(myValues$dgxLoaded), "No Differential Expression Table Provided!")
-			#)
-			#shiny::validate(
-			#	need(!is.null(myValues$method()), "No Inference Algorithm Selected!")
-			#)
-			#shiny::validate(
-			#	need(!is.null(myValues$est()), "No Correlation Selected!")
-			#)
-			#shiny::validate(
-			#	need(!is.null(myValues$disc()), "No Discretization Method Selected!")
-			#)
+                                if(is.null(myValues$est())){
+                                        shinyjs::info(paste0("No Correlation Selected!"))
+                                }
 
-                        if(is.null(myValues$method())){
-                                shinyjs::info(paste0("No Inference Algorithm Selected!"))
+                                if(is.null(myValues$disc())){
+                                        shinyjs::info(paste0("No Discretization Method Selected!"))
+                                }
+
+                                if(any(
+                                        is.null(myValues$gxTable()), 
+                                        is.null(myValues$dgxLoaded), 
+                                        is.null(myValues$method()), 
+                                        is.null(myValues$est()), 
+                                        is.null(myValues$disc())
+                                ))
+                                return(NULL)
                         }
 
-                        if(is.null(myValues$est())){
-                                shinyjs::info(paste0("No Correlation Selected!"))
-                        }
-
-                        if(is.null(myValues$disc())){
-                                shinyjs::info(paste0("No Discretization Method Selected!"))
-                        }
-
-                        if(any(
-                                is.null(myValues$gxTable()), 
-                                is.null(myValues$dgxLoaded), 
-                                is.null(myValues$method()), 
-                                is.null(myValues$est()), 
-                                is.null(myValues$disc())
-                        ))
-                        return(NULL)
-
-			localGxTable <- myValues$gxTable()
 			localDgxTable <- myValues$dgxTable
 			rOrgDB <- unlist(strsplit(input$organism, ";"))[1]
 
@@ -294,8 +278,10 @@ shinyServer(
                                 #return(NULL)
                                 localDgxTable <- localDgxTable[-missingSymbolsIdx,]
                                 rowNamesDgx <- rownames(localDgxTable)
-                                localGxTable <- localGxTable[rowNamesDgx,]
                         }
+
+                        localGxTable <- myValues$gxTable()
+                        localGxTable <- localGxTable[rowNamesDgx,]
 
                         #Check differential expression vs expression matrix
                         rowNamesDgx <- rownames(localDgxTable)
@@ -312,7 +298,8 @@ shinyServer(
                                         shinyjs::info("Missing too many genes from Differential Expression Table.\nEXITING!!!")
                                         return(NULL)
                                 }
-                                localDgxTable <- localDgxTable[missingSymbolsIdx,]
+                                localDgxTable <- localDgxTable[-missingSymbolsIdx,]
+                                rowNamesDgx <- rownames(localDgxTable)
                                 localGxTable <- localGxTable[rowNamesDgx,]
                         }
 
@@ -325,7 +312,85 @@ shinyServer(
                                 "Missing IDs: \n",
                                 paste0(rowNamesDgx[missingSymbolsIdx], collapse=", ")
                                 ))
+                                localGxTable <- localGxTable[-missingSymbolsIdx,]
+                                rowNamesGx <- rownames(localGxTable)
+                                localDgxTable <- localDgxTable[rowNamesGx,]
                                 #return(NULL)
+                        }
+
+                        runMINET <- FALSE
+                        if(length(grep("minet", input$ensembleStrat))>0){
+                                runMINET <- TRUE
+                        }
+                        
+                        if(length(grep("user", input$ensembleStrat))>0){
+                                matDF <- input$mat
+                                userMatList <- list()
+                                fileNames <- matDF$name
+                                filePaths <- matDF$datapath
+                                for(i in c(1:length(filePaths))){
+                                        userMat <- as.matrix(read.csv(filePaths[i], row.names=1, header=TRUE, sep="\t", check.names=FALSE))
+                                        if(any(is.na(userMat))){
+                                                shinyjs::info(paste0("Uploaded matrix contains NA values!\n\nPlease ensure that the input matrix contains SCORES or RANKS as weights!"))
+                                                return(NULL)
+                                        }
+                                        if(all(userMat %in% c(0,1))){
+                                                shinyjs::info(paste0("Uploaded matrix is a binary matrix with values 0 and 1!\n\nPlease ensure that the input matrix contains SCORES or RANKS as weights!"))
+                                                return(NULL)
+                                        }
+
+                                        #Check integrity of user uploaded adjacency matrix
+                                        if(nrow(userMat)!=ncol(userMat)){
+                                                shinyjs::info(paste0("File:", fileNames[i], " has differring number of rows and columns, ROWS:", nrow(userMat), " & COLS:", ncol(userMat), "\n\n Please check for consistency and rerun analysis! EXITING!!!" 
+                                                ))
+                                                return(NULL)
+                                        }
+
+                                        rowNamesMat <- rownames(userMat)
+                                        colNamesMat <- colnames(userMat)
+                                        errorIdx <- which(!rowNamesMat %in% colNamesMat)
+                                        errorIdx2 <- which(!colNamesMat %in% rowNamesMat)
+                                        if(any(length(errorIdx)>0, length(errorIdx2)>0)){
+                                                shinyjs::info(paste0("File:", fileNames[i], " has mismatches betweem column names and row names.\n\nPlease check for consistency and rerun analysis! EXITING!!!" 
+                                                ))
+                                                return(NULL)
+                                        }
+
+                                        userMat <- userMat[,rowNamesMat]
+                                        #Check differential expression vs expression matrix
+                                        rowNamesDgx <- rownames(localDgxTable)
+                                        missingSymbolsIdx <- which(!rowNamesDgx %in% rowNamesMat)
+                                        if(length(missingSymbolsIdx)>0){
+                                                shinyjs::info(paste0("Unable to map ", length(missingSymbolsIdx), " of ", length(rowNamesDgx), 
+                                                "Gene Symbols from Differential Expression Table to File:", fileNames[i], "!\n\n",
+                                                "Missing IDs: \n",
+                                                paste0(rowNamesDgx[missingSymbolsIdx], collapse=", ")
+                                                ))
+
+                                                if((length(missingSymbolsIdx)/length(rowNamesDgx))*100>20){
+                                                        shinyjs::info("Missing too many genes from Differential Expression Table.\nEXITING!!!")
+                                                        return(NULL)
+                                                }
+                                                localDgxTable <- localDgxTable[-missingSymbolsIdx,]
+                                                rowNamesDgx <- rownames(localDgxTable)
+                                                localGxTable <- localGxTable[rowNamesDgx,]
+                                                #userMat <- userMat[rowNamesDgx,rowNamesDgx]
+                                        }
+                                        userMatList[[i]] <- userMat
+                                }
+
+                                if(length(userMatList)>0){
+                                        rowNamesDgx <- rownames(localDgxTable)
+                                        for(i in c(1:length(userMatList))){
+                                                userMatList[[i]] <- userMatList[[i]][rowNamesDgx,rowNamesDgx]
+                                        }
+                                }
+                                #return(NULL)
+                        }
+
+                        if(input$ensembleStrat=="minet+user"){
+                                rowNamesDgx <- rownames(localDgxTable)
+                                localGxTable <- localGxTable[rowNamesDgx,]
                         }
 
 			print("Passed Validations.....")
@@ -352,8 +417,8 @@ shinyServer(
                         #return(NULL)
 
                         corMat <- NULL
-                        matFile <- input$mat
-			if(is.null(matFile)){
+                        #matFile <- input$mat
+			if(runMINET || length(userMatList)>1){
                                 myMethod <- myValues$method()
                                 myEst <- myValues$est()
                                 myDisc <- myValues$disc()
@@ -365,31 +430,18 @@ shinyServer(
 
                                 progress$set(message="Inference", value=0)
 
-                                ##corMat <- get_ranked_consensus_binary_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
-                                #rankMat <- get_ranked_consensus_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, debug_output=FALSE, updateProgress=updateProgress)
-                                rankMat <- get_ranked_consensus_matrix(localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, edge_selection_strategy=input$selEdge, topN=input$topCutOff, debug_output=FALSE, updateProgress=updateProgress)
-                                resL <- parse_edge_rank_matrix(rankMat)
+                                rankMat <- get_ranked_consensus_matrix(gx_table=localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, matList=userMatList, mat_weights=input$matWeights, ensemble_strategy=input$ensembleStrat, debug_output=FALSE, updateProgress=updateProgress)
+                                resL <- parse_edge_rank_matrix(rankMat, mat_weights=input$matWeights, edge_selection_strategy=input$selEdge, topN=input$topCutOff)
                                 corMat <- resL[["bin_mat"]]
                                 edgeRank <- resL[["edge_rank"]]
                         }else{
-                                print("Reading loaded correlation matrix...")
-                                #corMat <- as.matrix(read.csv(matFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE))
-                                rankMat <- as.matrix(read.csv(matFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE))
-                                if(any(is.na(rankMat))){
-                                        shinyjs::info(paste0("Uploaded matrix contains NA values!\n\nPlease ensure that the input matrix contains edge ranks, as exported from INfORM!"))
-                                        return(NULL)
-                                }
-                                if(all(rankMat %in% c(0,1))){
-                                        shinyjs::info(paste0("Uploaded matrix is a binary matrix with values 0 and 1!\n\nPlease ensure that the input matrix contains edge ranks, as exported from INfORM!"))
-                                        return(NULL)
-                                }
-                                print("Rank Mat Str : ")
-                                print(str(rankMat))
-                                resL <- parse_edge_rank_matrix(rankMat)
+                                rankMat <- userMatList[[1]]
+                                resL <- parse_edge_rank_matrix(rankMat, mat_weights=input$matWeights, edge_selection_strategy=input$selEdge, topN=input$topCutOff)
                                 corMat <- resL[["bin_mat"]]
+                                edgeRank <- resL[["edge_rank"]]
+
                                 print("Bin Mat Str : ")
                                 print(str(corMat))
-                                edgeRank <- resL[["edge_rank"]]
                                 print("Edge Rank : ")
                                 print(length(edgeRank))
                                 print(max(edgeRank))
@@ -522,7 +574,7 @@ shinyServer(
 			igraph::vertex_attr(localIGraph, name="group") <- members[V(localIGraph)$name]
 
 			updateProgress(detail="Annotating Modules...", value=2/4)
-			modules_ll <- annotate_modules(iGraph=localIGraph, modules=modules, rl=localRankedGenes, rl.c=localRankedGenes.c, rl.pv=localRankedGenes.pv, rl.lfc=localRankedGenes.lfc, rl.edge=edgeRank, annDB=rOrgDB, min_mod_size=minModSize, prefix=modMethod)
+			modules_ll <- annotate_modules(iGraph=localIGraph, modules=modules, rl=localRankedGenes, rl.c=localRankedGenes.c, rl.pv=localRankedGenes.pv, rl.lfc=localRankedGenes.lfc, rl.edge=edgeRank, annDB=rOrgDB, p_value=input$sigPval, min_mod_size=minModSize, prefix=modMethod)
 
 			updateProgress(detail="Generating Module Score Table...", value=3/4)
 			#Create IC list for semsim
@@ -630,7 +682,7 @@ shinyServer(
 			igraph::vertex_attr(localIGraph, name="group") <- members[V(localIGraph)$name]
 
 			updateProgress(detail="Annotating Modules...", value=2/4)
-			modules_ll <- annotate_modules(iGraph=localIGraph, modules=modules, rl=localRankedGenes, rl.c=localRankedGenes.c, rl.pv=localRankedGenes.pv, rl.lfc=localRankedGenes.lfc, rl.edge=edgeRank, annDB=rOrgDB, min_mod_size=minModSize, prefix=modMethod)
+			modules_ll <- annotate_modules(iGraph=localIGraph, modules=modules, rl=localRankedGenes, rl.c=localRankedGenes.c, rl.pv=localRankedGenes.pv, rl.lfc=localRankedGenes.lfc, rl.edge=edgeRank, annDB=rOrgDB, p_value=input$sigPval, min_mod_size=minModSize, prefix=modMethod)
 
 			updateProgress(detail="Generating Module Score Table...", value=3/4)
 			#Create IC list for semsim
@@ -775,27 +827,41 @@ shinyServer(
 		)
 
 		shiny::observe({
-			if(is.null(input$mat)){
-				shinyjs::enable("calcMat")
-				shinyjs::enable("method")
-				shinyjs::enable("est")
-				shinyjs::enable("disc")
-				shinyjs::enable("cores")
-				shinyjs::enable("selEdge")
-			}
-			else{
+			if(input$ensembleStrat=="user"){
 				shinyjs::disable("calcMat")
 				shinyjs::disable("method")
 				shinyjs::disable("est")
 				shinyjs::disable("disc")
 				shinyjs::disable("cores")
-				shinyjs::disable("selEdge")
+				#shinyjs::disable("selEdge")
+			}
+			else{
+				shinyjs::enable("calcMat")
+				shinyjs::enable("method")
+				shinyjs::enable("est")
+				shinyjs::enable("disc")
+				shinyjs::enable("cores")
+				#shinyjs::enable("selEdge")
 			}
 
-                        if(is.null(input$gx) || is.null(input$dgx)){
-				shinyjs::disable("runINfORM")
-                        }else{
-                                shinyjs::enable("runINfORM")
+                        if(input$ensembleStrat=="minet"){
+                                if(is.null(input$gx) || is.null(input$dgx)){
+                                        shinyjs::disable("runINfORM")
+                                }else{
+                                        shinyjs::enable("runINfORM")
+                                }
+                        }else if(input$ensembleStrat=="user"){
+                                if(is.null(input$dgx) || is.null(input$mat)){
+                                        shinyjs::disable("runINfORM")
+                                }else{
+                                        shinyjs::enable("runINfORM")
+                                }
+                        }else if(input$ensembleStrat=="minet+user"){
+                                if(is.null(input$gx) || is.null(input$dgx) || is.null(input$mat)){
+                                        shinyjs::disable("runINfORM")
+                                }else{
+                                        shinyjs::enable("runINfORM")
+                                }
                         }
 
 			if(is.null(myValues$gxCorMat)){
@@ -839,6 +905,12 @@ shinyServer(
                         }else{
 				shinyjs::enable("rChartButton")
 				shinyBS::removeTooltip(session, id="rChartButton")
+                        }
+
+                        if(input$ensembleStrat=="minet"){
+				shinyjs::hide(id="matOptions", anim=TRUE)
+                        }else{
+				shinyjs::show(id="matOptions", anim=TRUE)
                         }
 		})
 		
@@ -1272,7 +1344,7 @@ shinyServer(
 			sim_cutoff=0.4
                         optAE <- morphed_ae_ll[["chosen"]]
 			#GO_clust_summ_list <- go_summarization(optAE, score_col="EASE_Score", annDB=rOrgDB, IC_ll=IC_ll)
-			GO_clust_summ_list <- go_summarization(optAE, score_col="Score", annDB=rOrgDB, IC_ll=IC_ll, log_transform=FALSE)
+			GO_clust_summ_list <- go_summarization(optAE, score_col="Score", annDB=rOrgDB, IC_ll=IC_ll, log_transform=FALSE, simMeasure=input$selSemSim, treeHeight=input$treeHeight)
 
 			updateProgress(detail="Completed", value=4/4)
 
