@@ -10,6 +10,8 @@ suppressMessages(library(randomcoloR))
 suppressMessages(library(radarchart))
 suppressMessages(library(Rserve))
 suppressMessages(library(WriteXLS))
+suppressMessages(library(igraph))
+suppressMessages(library(plyr))
 print("Print Source Directory")
 print(dirname(getSrcDirectory(function(x){x})))
 functions_R <- file.path(dirname(getSrcDirectory(function(x){x})), "INfORM_functions.R")
@@ -430,7 +432,7 @@ shinyServer(
 
                                 progress$set(message="Inference", value=0)
 
-                                rankMat <- get_ranked_consensus_matrix(gx_table=localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, ncores=myCores, matList=userMatList, mat_weights=input$matWeights, ensemble_strategy=input$ensembleStrat, debug_output=FALSE, updateProgress=updateProgress)
+                                rankMat <- get_ranked_consensus_matrix(gx_table=localGxTable, iMethods=myMethod, iEst=myEst, iDisc=myDisc, summ_by=input$summType, score_type=input$bordaScore, ncores=myCores, matList=userMatList, mat_weights=input$matWeights, ensemble_strategy=input$ensembleStrat, debug_output=FALSE, updateProgress=updateProgress)
                                 resL <- parse_edge_rank_matrix(rankMat, mat_weights=input$matWeights, edge_selection_strategy=input$selEdge, topN=input$topCutOff)
                                 corMat <- resL[["bin_mat"]]
                                 edgeRank <- resL[["edge_rank"]]

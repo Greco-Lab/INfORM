@@ -53,6 +53,7 @@ utils::globalVariables(names=c("GO.db"))
 #' @param iMethods Vector of valid inference algorithms for MINET package.
 #' @param iEst Vector of valid correlation methods for MINET package.
 #' @param iDisc Vector of valid discretization methods for MINET package.
+#' @param summ_by Measure for summarizing the co-expression score of gene pairs from a set of netword to create a consensus network; options:median, mean, max; default:median.
 #' @param ncores Number of cores for running instances of MINET in parallel default:2.
 #' @param debug_output Print help and status messages to help debug the running of the function default:FALSE.
 #' @param updateProgress Shiny application can request for update of progress from this function default:NULL.
@@ -63,13 +64,14 @@ utils::globalVariables(names=c("GO.db"))
 #' iMethods=c("clr","aracne","mrnet","mrnetb"),
 #' iEst=c("pearson","spearman","kendall","mi.empirical","mi.mm","mi.shrink","mi.sg"),
 #' iDisc=c("none","equalfreq","equalwidth","globalequalwidth"),
-#' ncores=12,
-#' debug_output=TRUE
-#' )
+#' summ_by="median",
+#' ncores=2,
+#' debug_output=TRUE,
+#' updateProgress=NULL)
 #' }
 #' @keywords internal
 #' @export
-calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, debug_output=FALSE, updateProgress=NULL){
+calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, summ_by="median", ncores=2, debug_output=FALSE, updateProgress=NULL){
 	parList <- list()
 	out.GX.list<- list()
 	out.tmp.list<- list()
@@ -95,6 +97,9 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 		for(j in 1:length(iEst)){
 		#print(paste("-",est.opt2[j]))
 			for(k in 1:length(iDisc)){
+                                if(grepl("mi\\..*", est.opt[j]) && disc.opt[k]=="none"){
+                                        next
+                                }
 				cntr <- cntr + 1
 				parList[[cntr]] <- list()
 				parList[[cntr]][["mt"]] <- iMethods[i]
@@ -127,28 +132,28 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 		disc <- parList[[i]]$disc
 		#print(parList[[i]]$mt)
 
-		if((est == "mi.empirical" | est == "mi.mm" | est == "mi.shrink" | est == "mi.sg") & disc == "none") {
-			miMat <- -1
-			miMatName <- "np"
-		}
-		else{
-			if(debug_output==TRUE)
-			utils::capture.output(print(paste("----",mt,est,disc, sep="__")), file="minet-log.txt", append=TRUE)
+		#if((est == "mi.empirical" | est == "mi.mm" | est == "mi.shrink" | est == "mi.sg") & disc == "none") {
+		#	miMat <- -1
+		#	miMatName <- "np"
+		#}
+		#else{
+                if(debug_output==TRUE)
+                utils::capture.output(print(paste("----",mt,est,disc, sep="__")), file="minet-log.txt", append=TRUE)
 
-			utils::capture.output(print(paste0("Iteration-", i, ": ", mt, "-", est, "-", disc)), file="minet-to-run.txt", append=TRUE)
-			#print("Before Updating text")
-			#if (is.function(updateProgress)){
-			#	text <- paste("MINET: ", mt, "-", est, "-", disc, "-", sep="")
-			#	print("Updating text")
-			#	updateProgress(detail = text)
-			#}
+                utils::capture.output(print(paste0("Iteration-", i, ": ", mt, "-", est, "-", disc)), file="minet-to-run.txt", append=TRUE)
+                #print("Before Updating text")
+                #if (is.function(updateProgress)){
+                #	text <- paste("MINET: ", mt, "-", est, "-", disc, "-", sep="")
+                #	print("Updating text")
+                #	updateProgress(detail = text)
+                #}
 
-			ptm <- proc.time()
-			miMat <- minet::minet(stdGX, method=mt, estimator=est, disc=disc)
-			utils::capture.output(print(paste0("Iteration-", i, ", ", mt, "-", est, "-", disc, ": ", "MINET Execution Time - ", round(proc.time() - ptm)[3], " sec")), file="minet-completed.txt", append=TRUE)
-			#capture.output(print(proc.time() - ptm), file="minet-log.txt", append=T)
-			miMatName <- paste(mt,est,disc,sep="__")
-		}
+                ptm <- proc.time()
+                miMat <- minet::minet(stdGX, method=mt, estimator=est, disc=disc)
+                utils::capture.output(print(paste0("Iteration-", i, ", ", mt, "-", est, "-", disc, ": ", "MINET Execution Time - ", round(proc.time() - ptm)[3], " sec")), file="minet-completed.txt", append=TRUE)
+                #capture.output(print(proc.time() - ptm), file="minet-log.txt", append=T)
+                miMatName <- paste(mt,est,disc,sep="__")
+		#}
 		out.list <- list("mat"=miMat, "name"=miMatName)
 	}
 	utils::capture.output(print("For Each Finished, Stopping Cluster..."), file="minet-log.txt", append=TRUE)
@@ -172,11 +177,17 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
         }
 
         if(length(llGX)>1){
-            print("Making Median Matrix...")
+            print(paste0("Making ", summ_by, " Matrix..."))
             arr1<-abind::abind(llGX,along=3)
-            matGX <- apply(arr1,c(1,2),median)
+            if(summ_by=="median"){
+                matGX <- apply(arr1,c(1,2),median)
+            }else if(summ_by=="mean"){
+                matGX <- apply(arr1,c(1,2),mean)
+            }else if(summ_by=="max"){
+                matGX <- apply(arr1,c(1,2),max)
+            }
         }else{
-            print("Only one matrix, not computing median!")
+            cat("Only one matrix, not computing ", summ_by, " matrix!\n")
             matGX <- llGX[[1]]
         }
 
@@ -196,12 +207,13 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 #' @param iMethods Vector of valid inference algorithms for MINET package.
 #' @param iEst Vector of valid correlation methods for MINET package.
 #' @param iDisc Vector of valid discretization methods for MINET package.
-#' @param ncores Number of cores for running instances of MINET in parallel default:2.
-#' @param edge_selection_strategy How to select top ranked edges default:default. By default selectis top edges until all the nodes have at least one edge.
-#' @param topN Top n percentage edges to select if edge_selection_strategy is 'top' default:10.
-#' @param debug_output Print help and status messages to help debug the running of the function default:FALSE.
-#' @param updateProgress Shiny application can request for update of progress from this function default:NULL.
-#' @return A symmetrix matrix with median edge ranks representing the edge rank based consensus from different inference algorithms.
+#' @param ncores Number of cores for running instances of MINET in parallel; default:2.
+#' @param matList List of co-expression matrices provided by user; default:NULL.
+#' @param mat_weights Type of scores in the user provided matrices; default:rank.
+#' @param ensemble_strategy Strategy to use for ensemble "minet" for minet generated matrices, or "user" for only user provided matrices, or "minet+user" to combine minet generated matrices and user provided matrices; default:minet.
+#' @param debug_output Print help and status messages to help debug the running of the function; default:FALSE.
+#' @param updateProgress Shiny application can request for update of progress from this function; default:NULL.
+#' @return A symmetrix matrix with edge ranks representing the edge rank based consensus from different inference algorithms.
 #' @examples
 #' \dontrun{
 #' get_ranked_consensus_matrix(gx_table=gene_expression.df,
@@ -209,31 +221,37 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores
 #' iEst=c("pearson","spearman","kendall","mi.empirical","mi.mm","mi.shrink","mi.sg"),
 #' iDisc=c("none","equalfreq","equalwidth","globalequalwidth"),
 #' ncores=12,
-#' edge_selection_strategy="default",
-#' topN=10,
-#' debug_output=TRUE
-#' )
+#' matList=list(mat1, mat2, matN),
+#' mat_weights="rank",
+#' ensemble_strategy="minet",
+#' debug_output=TRUE,
+#' updateProgress=TRUE)
 #' }
 #' @keywords internal
 #' @export
 #get_ranked_consensus_binary_matrix <- function(gx_table, iMethods, iEst, iDisc, ncores=2, debug_output=FALSE, updateProgress=NULL){
-get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL, iDisc=NULL, ncores=2, matList=NULL, mat_weights="rank", ensemble_strategy="minet", debug_output=FALSE, updateProgress=NULL){
+get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL, iDisc=NULL, summ_by="median", score_type="median", ncores=2, matList=NULL, mat_weights="rank", ensemble_strategy="minet", debug_output=FALSE, updateProgress=NULL){
 	mat_ll <- list()
     	ranked_edges_ll <- list()
+
+        if(!score_type %in% c("mean", "median", "geo.mean", "l2norm")){
+                print(paste0("score_type : '", score_type, "' is not a valid Borda score!"))
+                return(NULL)
+        }
 
         if(length(grep("minet" ,ensemble_strategy))>0){
                 mthdCount <- 1
                 totalMthds <- length(iMethods)+1
                 for(mthd in iMethods){
                         if (is.function(updateProgress)) {
-                                text <- paste0("'", mthd, "' Median")
+                                text <- paste0("'", mthd, "' consensus by ", summ_by)
                                 value <- mthdCount / totalMthds
                                 updateProgress(detail = text, value = value)
                         }
                         mthdCount <- mthdCount + 1
 
                         print(paste0("Calculate correlation matrix for method : ", mthd))
-                        mat_ll[[mthd]] <- calculate_correlation_matrix(gx_table=gx_table, iMethods=mthd, iEst=iEst, iDisc=iDisc, ncores=ncores)
+                        mat_ll[[mthd]] <- calculate_correlation_matrix(gx_table=gx_table, iMethods=mthd, iEst=iEst, iDisc=iDisc, summ_by=summ_by, ncores=ncores)
 
                         print(paste0("Get ranked edges for method : ", mthd))
                         mat_ll[[mthd]][lower.tri(mat_ll[[mthd]], diag=TRUE)] <- NA
@@ -288,13 +306,13 @@ get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL,
         print(names(ranked_edges_ll))
         print(lapply(ranked_edges_ll, length))
 
-        if (is.function(updateProgress)) {
-	    updateProgress(detail = "Consensus Binary", value = 1)
+        if(is.function(updateProgress)) {
+                updateProgress(detail = "Consensus Binary", value = 1)
         }
 
 	print("Perform Borda on list of list of ranked edges.")
 	borda_res <- TopKLists::Borda(ranked_edges_ll)
-        Borda.plot(borda_res)
+        #Borda.plot(borda_res)
 
 	print("Get a consensus binary matrix by selecting the most significant ranked edges from median rank of Borda result.")
         if(length(mat_ll)>0){
@@ -306,7 +324,7 @@ get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL,
         print("rank_mat")
         print(dim(rank_mat))
 
-	median_list <- borda_res$TopK$median
+	ra_list <- borda_res$TopK[[score_type]]
         #Kendall.plot(ranked_edges_ll, median_list)
 
 	#if(edge_selection_strategy=="default"){
@@ -341,12 +359,12 @@ get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL,
 	#	}
 	#}
 
-        print("median_list:")
-        print(str(median_list))
-        print(length(median_list))
-        print(head(median_list))
-        for(i in c(1:length(median_list))){
-                local_genes <- strsplit(median_list[i], ";")[[1]]
+        print("ra_list:")
+        print(str(ra_list))
+        print(length(ra_list))
+        print(head(ra_list))
+        for(i in c(1:length(ra_list))){
+                local_genes <- strsplit(ra_list[i], ";")[[1]]
                 rank_mat[local_genes[1],local_genes[2]] <- i
                 rank_mat[local_genes[2],local_genes[1]] <- i
         }
@@ -362,12 +380,20 @@ get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL,
 #' @importFrom TopKLists Borda
 #'
 #' @param edge_rank_matrix A symmetrix matrix with edge ranks as weight.
-#' @param debug_output Print help and status messages to help debug the running of the function default:FALSE.
-#' @param updateProgress Shiny application can request for update of progress from this function default:NULL.
+#' @param edge_selection_strategy Strategy to select edges for ensemble, "default" selects ranked edges untill all nodes have degree>=1, "top" swtiches to top N percentage ranked genes specfied by topN parameter.
+#' @param mat_weights Type of scores in the ranked matrix; default:rank.
+#' @param topN Top N percentage ranked edges to create ensemble if the edge_selection_strategy is "top"; default:10
+#' @param debug_output Print help and status messages to help debug the running of the function; default:FALSE.
+#' @param updateProgress Shiny application can request for update of progress from this function; default:NULL.
 #' @return A list containing a vector of consensus edge ranks and a binary symmetrix matrix representing the edge rank matrix.
 #' @examples
 #' \dontrun{
-#' parse_edge_rank_matrix <- function(edge_rank_matrix, debug_output=FALSE, updateProgress=NULL)
+#' parse_edge_rank_matrix <- function(edge_rank_matrix, 
+#' edge_selection_strategy="default", 
+#' mat_weights="rank", 
+#' topN=10, 
+#' debug_output=FALSE, 
+#' updateProgress=NULL)
 #' }
 #' @keywords internal
 #' @export
@@ -819,9 +845,9 @@ get_modules <- function(iGraph, method="walktrap")
 #' modules,
 #' rl,
 #' rl.c,
-#' rl.pv,
-#' rl.lfc,
-#' rl.edge,
+#' rl.pv=NULL,
+#' rl.lfc=NULL,
+#' rl.edge=NULL,
 #' annDB="org.Hs.eg.db",
 #' p_value=0.05,
 #' min_mod_size=10,
@@ -830,7 +856,7 @@ get_modules <- function(iGraph, method="walktrap")
 #' }
 #' @keywords internal
 #' @export
-annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv, rl.lfc, rl.edge, annDB="org.Hs.eg.db", p_value=0.05, min_mod_size=10, prefix=NULL){
+annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv=NULL, rl.lfc=NULL, rl.edge=NULL, annDB="org.Hs.eg.db", p_value=0.05, min_mod_size=10, prefix=NULL){
 	res_ll <- list()
 	res_ll[["names"]] <- igraph::communities(modules)
 
@@ -867,16 +893,48 @@ annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv, rl.lfc, rl.edge, 
 			tmp_list <- list()
 			tmp_list[["rank_combined"]] <- round(1-(median(which(rl %in% x))/length(rl)),2)
 			tmp_list[["rank_centrality"]] <- round(1-(median(which(rl.c %in% x))/length(rl.c)),2)
-			tmp_list[["rank_pv"]] <- round(1-(median(which(rl.pv %in% x))/length(rl.pv)),2)
-			tmp_list[["rank_lfc"]] <- round(1-(median(which(rl.lfc %in% x))/length(rl.lfc)),2)
-			el <- apply(igraph::get.edgelist(igraph::induced.subgraph(iGraph, x)), 1, paste, collapse=";")
-			tmp_list[["rank_edge"]] <- round(1-(median(which(rl.edge %in% el))/length(rl.edge)),2)
+                        if(!is.null(rl.pv)){
+			        tmp_list[["rank_pv"]] <- round(1-(median(which(rl.pv %in% x))/length(rl.pv)),2)
+                        }
+                        if(!is.null(rl.lfc)){
+			        tmp_list[["rank_lfc"]] <- round(1-(median(which(rl.lfc %in% x))/length(rl.lfc)),2)
+                        }
+                        if(!is.null(rl.edge)){
+                                el <- apply(igraph::get.edgelist(igraph::induced.subgraph(iGraph, x)), 1, paste, collapse=";")
+                                tmp_list[["rank_edge"]] <- round(1-(median(which(rl.edge %in% el))/length(rl.edge)),2)
+                        }
 			tmp_list
 		}
 	)
 	return(res_ll)
 }
 
+#' Get table containing score for genes in the iGraph by th euser provided ranked lists.
+#'
+#' Get table containing score for genes in the iGraph by th euser provided ranked lists.
+#'
+#' @importFrom igraph communities induced.subgraph get.edgelist
+#'
+#' @param iGraph igraph object representing the main graph from which the subgraph should be extracted.
+#' @param gene_ll Named list of character vectors containing gene symbols, representing the genes present in modules.
+#' @param rl Ordered ranked list of genes obtained by taking median rank from Borda over all scores.
+#' @param rl.c Ordered ranked list of genes obtained by taking median rank from Borda over centrality scores.
+#' @param rl.pv Ordered ranked list of genes by P.Value obtained from differential expression analysis.
+#' @param rl.lfc Ordered ranked list of genes by Log FC obtained from differential expression analysis.
+#' @param rl.edge Ordered ranked list of edges obtained by taking median rank from Borda over ranked edges from matrices inferred by different algorithms.
+#' @return Data frame containing median(ranks), size and GO within similarity.
+#' @examples
+#' \dontrun{
+#' get_rank_table(iGraph=main.graph,
+#' gene_ll,
+#' rl,
+#' rl.c,
+#' rl.pv=NULL,
+#' rl.lfc=NULL,
+#' rl.edge=NULL)
+#' }
+#' @keywords internal
+#' @export
 get_rank_table <- function(iGraph, gene_ll, rl, rl.c, rl.pv, rl.lfc, rl.edge){
 	#res_ll <- list()
 	res_ll <- lapply(
@@ -885,10 +943,16 @@ get_rank_table <- function(iGraph, gene_ll, rl, rl.c, rl.pv, rl.lfc, rl.edge){
 			res <- c()
 			res["rank_combined"] <- round(1-(median(which(rl %in% x))/length(rl)),2)
 			res["rank_centrality"] <- round(1-(median(which(rl.c %in% x))/length(rl.c)),2)
-			res["rank_pv"] <- round(1-(median(which(rl.pv %in% x))/length(rl.pv)),2)
-			res["rank_lfc"] <- round(1-(median(which(rl.lfc %in% x))/length(rl.lfc)),2)
-			el <- apply(igraph::get.edgelist(igraph::induced.subgraph(iGraph, x)), 1, paste, collapse=";")
-			res["rank_edge"] <- round(1-(median(which(rl.edge %in% el))/length(rl.edge)),2)
+                        if(!is.null(rl.pv)){
+			        res["rank_pv"] <- round(1-(median(which(rl.pv %in% x))/length(rl.pv)),2)
+                        }
+                        if(!is.null(rl.lfc)){
+			        res["rank_lfc"] <- round(1-(median(which(rl.lfc %in% x))/length(rl.lfc)),2)
+                        }
+                        if(!is.null(rl.edge)){
+                                el <- apply(igraph::get.edgelist(igraph::induced.subgraph(iGraph, x)), 1, paste, collapse=";")
+                                res["rank_edge"] <- round(1-(median(which(rl.edge %in% el))/length(rl.edge)),2)
+                        }
                         res["size"] <- round(length(x)/igraph::vcount(iGraph),2)
 			res
 		}
@@ -976,7 +1040,7 @@ get_jaccard <- function(set1, set2){
 #' @param simThr Threshold of semantic similarity score to consider items as similar; DEFAULT:0.6.
 #' @param IC_ll list-of-list containing GOSemSimDATA objects for BP, MF and CC.
 #' @param annDB Organism specific annotation library default:'org.Hs.eg.db'.
-#' @param semSimMeasure Sematic similarity measure option from GOSemSim package default:'Rel'.
+#' @param simMeasure Sematic similarity measure option from GOSemSim package default:"Rel".
 #' @return Numerical value between 0 and 1 representing the Jaccard similarity coefficient.
 #' @examples
 #' \dontrun{
@@ -1110,6 +1174,7 @@ get_col_gradient <- function(low="red", high="yellow", ncolors=123) {
 #' Plot heatmap of the similarity matrix.
 #'
 #' @importFrom stats as.dist hclust as.dendrogram
+#' @importFrom gplots heatmap.2
 #'
 #' @param hSim Similarity matrix for plotting heatmap.
 #' @param rSim Similarity matrix for clustering the items on the rows of hSim.
@@ -1153,7 +1218,7 @@ plot_sim_heatmap <- function(hSim, rSim=NULL, cSim=NULL){
 	lowcol <- "red"
 	highcol <- "yellow"
 	plotcols <- get_col_gradient(lowcol, highcol)
-	heatmap.2(hot_data,
+	gplots::heatmap.2(hot_data,
 		Rowv=rDend,
 		Colv=cDend,
 		dendrogram="both",
@@ -1374,10 +1439,28 @@ go_summarization <- function(enriched_GO_DF, score_col="EASE_Score", annDB="org.
 		}
 
 		simsem_matrix <- GOSemSim::mgoSim(ont_ids, ont_ids, semData=d, measure=simMeasure, combine=NULL)
-		dim_len <- dim(simsem_matrix)[1]
+                if(is.null(simsem_matrix)){
+                        next
+                }
+		dim_vec <- dim(simsem_matrix)
+                #print(dim_vec)
+                if(is.null(dim_vec)){
+                        next
+                }
+		dim_len <- dim_vec[1]
 		#print(dim_len)
-		simsem_matrix_clean <- simsem_matrix[rowSums(is.na(simsem_matrix))!=dim_len, colSums(is.na(simsem_matrix))!=dim_len]
+                valRowIdx <- which(rowSums(is.na(simsem_matrix))!=dim_len)
+                valColIdx <- which(colSums(is.na(simsem_matrix))!=dim_len)
+                if(length(valRowIdx)<2 || length(valColIdx)<2){
+                        next
+                }
+
+		#simsem_matrix_clean <- simsem_matrix[rowSums(is.na(simsem_matrix))!=dim_len, colSums(is.na(simsem_matrix))!=dim_len]
+		simsem_matrix_clean <- simsem_matrix[valRowIdx, valColIdx]
 		simsem_matrix <- round(simsem_matrix_clean, 2)
+                #print(str(simsem_matrix))
+                #print(valRowIdx)
+                #print(valColIdx)
 		
 		simClust <- stats::hclust(stats::as.dist(1-simsem_matrix))
 
@@ -1598,7 +1681,22 @@ get_mod_gene_tables <- function(ig, rankedGenes, modLL, orgDB="org.Hs.eg.db"){
         return(mapped_df_ll)
 }
 
-#Resolve multiple attributes created by creating union of igraph modules
+#' Resolve multiple attributes formed by creating union of igraph modules.
+#'
+#' Resolve multiple attributes formed by creating union of igraph modules.
+#'
+#' @importFrom igraph as_data_frame vertex_attr delete_vertex_attr edge_attr delete_edge_attr
+#'
+#' @param ig_union igraph object representing the main graph from which the subgraph should be extracted.
+#' @param vertex_attr_names vector of names for vertex attributes from singular igraph to keep in union igraph.
+#' @param edge_attr_names vector of names for edge attributes to keep.
+#' @return List of data frames per modules cotaining gene rank and scores.
+#' @examples
+#' \dontrun{
+#' resolve_ig_union_attrs(ig_union, vertex_attr_names, edge_attr_names)
+#' }
+#' @keywords internal
+#' @export
 resolve_ig_union_attrs <- function(ig_union, vertex_attr_names, edge_attr_names){
 	#Resolve Vertex Attributes
 	ig_union_df <- igraph::as_data_frame(ig_union, what="vertices")

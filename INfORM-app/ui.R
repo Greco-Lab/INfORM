@@ -209,11 +209,21 @@ dashboardPage(
                                                                                         "globalequalwidth"
                                                                                 )
                                                                         )
-                                                                )))
-                                                        ),column(6,
-                                                                h4("Configure Gene Ranking"),
-                                                                wellPanel(fluidRow(column(12,
-                                                                        uiOutput("rankAttr") 
+                                                                ))),
+                                                                h4("Edge Selection For Final Ensemble"),
+                                                                wellPanel(fluidRow(column(6,
+                                                                        selectInput("selEdge", "Edge Selection Strategy",
+                                                                                choices=c("default", "top"),
+                                                                                multiple=FALSE,
+                                                                                selected="default",
+                                                                        )
+                                                                ),column(6,
+                                                                        numericInput("topCutOff", "Top 'n' Percent Edges",
+                                                                                value=10,
+                                                                                min=1,
+                                                                                max=100,
+                                                                                step=1
+                                                                        )
                                                                 ))),
                                                                 h4("Module Detection"),
                                                                 wellPanel(fluidRow(column(12,
@@ -246,23 +256,34 @@ dashboardPage(
                                                                                 )
                                                                         )
                                                                 )))
-                                                        )),fluidRow(column(6,
-                                                                h4("Edge Selection For Final Ensemble"),
-                                                                wellPanel(fluidRow(column(6,
-                                                                        selectInput("selEdge", "Edge Selection Strategy",
-                                                                                choices=c("default", "top"),
-                                                                                multiple=FALSE,
-                                                                                selected="default",
-                                                                        )
-                                                                ),column(6,
-                                                                        numericInput("topCutOff", "Top 'n' Percent Edges",
-                                                                                value=10,
-                                                                                min=1,
-                                                                                max=100,
-                                                                                step=1
-                                                                        )
-                                                                )))
                                                         ),column(6,
+                                                                h4("Intra Inference Algorithm Consensus"),
+                                                                wellPanel(fluidRow(column(12,
+                                                                        selectInput("summType", "Summarization Score", 
+                                                                                choices=c("median",
+                                                                                        "mean",
+                                                                                        "max"
+                                                                                ), 
+                                                                                multiple=FALSE, 
+                                                                                selected="median"
+                                                                        ) 
+                                                                ))),
+                                                                h4("Inter Inference Algorithm Consensus"),
+                                                                wellPanel(fluidRow(column(12,
+                                                                        selectInput("bordaScore", "Rank Aggregation Score", 
+                                                                                choices=c("median",
+                                                                                        "mean",
+                                                                                        "geo.mean",
+                                                                                        "l2norm"
+                                                                                ), 
+                                                                                multiple=FALSE, 
+                                                                                selected="median"
+                                                                        ) 
+                                                                ))),
+                                                                h4("Configure Gene Ranking"),
+                                                                wellPanel(fluidRow(column(12,
+                                                                        uiOutput("rankAttr") 
+                                                                ))),
                                                                 h4("Gene Ontology Annotation Options"),
                                                                 wellPanel(fluidRow(column(4,
                                                                         numericInput("sigPval", "Significanct P.Value",
