@@ -18,8 +18,13 @@ A novel computational method and its R and web-based implementations, to perform
   }
   
   #Install Bioconductor dependencies
+  if(!"GOSemSim" %in% rownames(installed.packages())){
+    print("Installing GOSemSim from GitHub!")
+    devtools::install_github("GuangchuangYu/GOSemSim")
+  }
+  
   source("http://bioconductor.org/biocLite.R")
-  bioc_pkgs <- c("org.Hs.eg.db", "org.Mm.eg.db", "GO.db", "AnnotationDbi", "GSEABase", "minet", "GOSemSim")
+  bioc_pkgs <- c("org.Hs.eg.db", "org.Mm.eg.db", "GO.db", "AnnotationDbi", "GSEABase", "minet")
   bioc_pkgs.inst <- bioc_pkgs[!(bioc_pkgs %in% rownames(installed.packages()))]
   if(length(bioc_pkgs.inst)>0){
     source("http://bioconductor.org/biocLite.R")
