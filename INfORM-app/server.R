@@ -8,7 +8,7 @@ suppressMessages(library(GSEABase))
 suppressMessages(library(visNetwork))
 suppressMessages(library(randomcoloR))
 suppressMessages(library(radarchart))
-suppressMessages(library(Rserve))
+#suppressMessages(library(Rserve))
 suppressMessages(library(WriteXLS))
 suppressMessages(library(igraph))
 suppressMessages(library(plyr))
@@ -1517,38 +1517,38 @@ shinyServer(
 			}
 		)
 
-                ##RSERVE SESSION
-                observeEvent(input$rserve_submit, {
-                        if(is.null(myValues$modules_ll)){
-                                shinyjs::info("RServe socket daemon not started. \n\nFailed to find detected modules!!!")
-                                return(NULL)
-                        }
+                ###RSERVE SESSION
+                #observeEvent(input$rserve_submit, {
+                #        if(is.null(myValues$modules_ll)){
+                #                shinyjs::info("RServe socket daemon not started. \n\nFailed to find detected modules!!!")
+                #                return(NULL)
+                #        }
 
-                        shinyjs::info(paste0("Rserve socket daemon started!!!\n\n",
-                        "NOTE: YOU HAVE STARTED A SOCKET SERVER SESSION. THIS SHINY APP WILL BE UNRESPONSIVE UNTIL THE SERVER IS SHUTDOWN FROM A REMOTE SESSION.\n\n",
-                        "KEEP CALM AND USE RSclient IN ANOTHER R SESSION TO ACCESS THE DAEMON.\n\n",
-                        " --- R CODE ---\n",
-                        "##Connect to INfORM\n",
-                        "c <- RSclient::RSconnect(host = \"localhost\", port = 6311)\n\n",
-                        "##List names of the variables from INfORM\n",
-                        "RSclient::RSeval(c, \"names(shiny_app_vars)\")\n\n",
-                        "##Store the shiny varialbes locally\n",
-                        "shiny_app_vars <- RSclient::RSeval(c, \"shiny_app_vars\")\n\n",
-                        "##Shutdown server and close connection\n",
-                        "RSclient::RSshutdown(c)\n",
-                        "RSclient::RSclose(c)\n",
-                        " --- R CODE ---"
-                        ))
-                        #print("Print on deamon start button:")
-                        #print(ls())
-                        #print(environment())
-                        #print("Global environment:")
-                        #print(myValues$envir)
-                        envir <- myValues$envir
-                        set_shiny_vars(shinyVars=myValues, shinyEnv=envir)
-                        #print(ls(envir))
-                        Rserve::run.Rserve()
-                })
+                #        shinyjs::info(paste0("Rserve socket daemon started!!!\n\n",
+                #        "NOTE: YOU HAVE STARTED A SOCKET SERVER SESSION. THIS SHINY APP WILL BE UNRESPONSIVE UNTIL THE SERVER IS SHUTDOWN FROM A REMOTE SESSION.\n\n",
+                #        "KEEP CALM AND USE RSclient IN ANOTHER R SESSION TO ACCESS THE DAEMON.\n\n",
+                #        " --- R CODE ---\n",
+                #        "##Connect to INfORM\n",
+                #        "c <- RSclient::RSconnect(host = \"localhost\", port = 6311)\n\n",
+                #        "##List names of the variables from INfORM\n",
+                #        "RSclient::RSeval(c, \"names(shiny_app_vars)\")\n\n",
+                #        "##Store the shiny varialbes locally\n",
+                #        "shiny_app_vars <- RSclient::RSeval(c, \"shiny_app_vars\")\n\n",
+                #        "##Shutdown server and close connection\n",
+                #        "RSclient::RSshutdown(c)\n",
+                #        "RSclient::RSclose(c)\n",
+                #        " --- R CODE ---"
+                #        ))
+                #        #print("Print on deamon start button:")
+                #        #print(ls())
+                #        #print(environment())
+                #        #print("Global environment:")
+                #        #print(myValues$envir)
+                #        envir <- myValues$envir
+                #        set_shiny_vars(shinyVars=myValues, shinyEnv=envir)
+                #        #print(ls(envir))
+                #        Rserve::run.Rserve()
+                #})
 
 		##DYNAMIC UI WIDGETS
 		output$selOrganism <- shiny::renderUI({
