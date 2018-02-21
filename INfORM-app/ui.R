@@ -54,6 +54,23 @@ dashboardPage(
 		useShinyjs(),
 		extendShinyjs(text = jsCode),
 		inlineCSS(appCSS),
+                shinyBS::bsModal("importGxModal", "Import Gene Expression Table", "import_gx_submit", size="large",
+			fluidRow(
+				column(3,
+					fileInput("gx", label="File")
+				),column(3,
+					uiOutput("selGxSep")
+				),column(3,
+					textInput("gxSepT", "Other Seperator", value=":")
+				),column(3,
+					uiOutput("selGxQuote")
+				)
+			),fluidRow(
+				column(12, align="right",
+					shinyBS::bsButton("upload_gx_submit", label="Import", style="info", icon=icon("hand-o-right"))
+				)
+			)
+		),
 		shinyBS::bsModal("importDgxModal", "Import Differential Gene Expression Table", "import_dgx_submit", size="large",
 			fluidRow(
 				column(3,
@@ -100,7 +117,17 @@ dashboardPage(
 						wellPanel(
 							fluidRow(
 								column(4,
-									fileInput(inputId="gx", label="Gene Expression Table")
+									#fileInput(inputId="gx", label="Gene Expression Table")
+                                                                        div(id="outerGxDiv", class="form-group shiny-input-container",
+										tags$label("Gene Expression Table"),
+										div(id="innerGxDiv", class="input-group",
+											div(id="gxBtnDiv", class="input-group-btn",
+												shinyBS::bsButton("import_gx_submit", label="Upload", style="danger", icon=icon("exclamation-circle"))
+											),
+											tags$input(id="gxUploadDisp", class="form-control", placeholder="No file uploaded", readonly="readonly", type="text")
+										)
+									),
+									shinyBS::bsTooltip("import_gx_submit", "Launch a graphical window, to configure import of gene expression data from a file!", placement="bottom")
 								),column(4,
 									#fileInput(inputId="dgx", label="Differential Gene Expression Table"),
 								#),column(2,
@@ -114,7 +141,7 @@ dashboardPage(
 											tags$input(id="dgxUploadDisp", class="form-control", placeholder="No file uploaded", readonly="readonly", type="text")
 										)
 									),
-									shinyBS::bsTooltip("import_dgx_submit", "Launch a graphical window, to configure import of differenatial expression data from a file!", placement="bottom")
+									shinyBS::bsTooltip("import_dgx_submit", "Launch a graphical window, to configure import of differential expression data from a file!", placement="bottom")
 								),column(4,
                                                                         selectInput("ensembleStrat", "Choose Ensemble Strategy", 
                                                                                 choices=c("MINET Inference"="minet",

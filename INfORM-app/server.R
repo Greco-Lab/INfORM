@@ -45,18 +45,62 @@ shinyServer(
 		myValues$quoteChoices <- c(NA, "SINGLE", "DOUBLE")
                 myValues$envir <- environment()
 
-		myValues$gxTable <- shiny::reactive({
-			gxFile <- input$gx
-			#if (is.null(gxFile) || is.null(myValues$dgxTable()))
-			if (is.null(gxFile) || is.null(myValues$dgxTable))
+		myValues$inputGx <- observeEvent(input$upload_gx_submit, {
+                        gxFile <- input$gx
+			##if (is.null(gxFile) || is.null(myValues$dgxTable()))
+			#if (is.null(gxFile) || is.null(myValues$dgxTable))
+			if (is.null(gxFile))
 			return(NULL)
 
+                        sepS <- input$gxSepS
+			sepT <- input$gxSepT
+			sepChar=NULL
+			if(sepS=="OTHER"){
+				sepChar <- sepT
+			}else{
+				if(sepS=="TAB"){
+					sepChar="\t"
+				}else if(sepS=="SPACE"){
+					sepChar=" "
+				}else{
+					sepChar=sepS
+				}
+			}
+			print(sepChar)
+
+			quote <- input$gxQuote
+			print(quote)
+			print(is.na(quote))
+			if(is.na(quote) || quote=="NA"){
+				quote <- ""
+			}else if(quote=="SINGLE"){
+				quote <- "'"
+			}else if(quote=="DOUBLE"){
+				quote <- '"'
+			}
+
 			print("Reading loaded gx File...")
-			gx <- read.csv(gxFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE, stringsAsFactors=FALSE, quote="")
-                        ##gx <- gx[order(rownames(gx)),]
-                        #gx <- gx[rownames(myValues$dgxTable()),]
+			#gx <- read.csv(gxFile$datapath, row.names=1, header=TRUE, sep="\t", check.names=FALSE, stringsAsFactors=FALSE, quote="")
+			gx <- read.csv(gxFile$datapath, row.names=1, header=TRUE, sep=sepChar, stringsAsFactors=FALSE, quote=quote, as.is=TRUE, strip.white=TRUE, check.names=FALSE)
+                        myValues$inputGx <- gx
+
+			updateTextInput(session, "gxUploadDisp", value=gxFile$name)
+			shinyBS::toggleModal(session, "importGxModal", toggle="close")
+                        shinyBS::updateButton(session, "import_gx_submit", style="success", icon=icon("check-circle"))
+		})
+
+		myValues$gxTable <- shiny::reactive({
+			#gxFile <- input$gx
+			##if (is.null(gxFile) || is.null(myValues$dgxTable()))
+			#if (is.null(gxFile) || is.null(myValues$dgxTable))
+			#return(NULL)
+
+			if (is.null(myValues$inputGx) || is.null(myValues$dgxTable))
+			return(NULL)
+
+			gx <- myValues$inputGx
                         gx <- gx[rownames(myValues$dgxTable),]
-                        gx
+                        return(gx)
 		})
 
 		#myValues$dgxTable <- shiny::reactive({
@@ -888,6 +932,12 @@ shinyServer(
 				shinyjs::disable("sepT")
 			}
 
+                        if(!is.null(input$gxSepS) && input$gxSepS=="OTHER"){
+				shinyjs::enable("gxSepT")
+			}else{
+				shinyjs::disable("gxSepT")
+			}
+
 			if(input$selEdge=="default"){
 				shinyjs::disable("topCutOff")
                                 shinyjs::hide(id="topCutOff", anim=TRUE)
@@ -1573,6 +1623,15 @@ shinyServer(
 		output$selQuote <- renderUI({
 			selectInput("quote", "Quotes", choices=myValues$quoteChoices, selected=myValues$quoteChoices[1])
 		})
+
+                output$selGxSep <- renderUI({
+			selectInput("gxSepS", "Column Seperator", choices=myValues$sepChoices, selected=myValues$sepChoices[1])
+		})
+
+		output$selGxQuote <- renderUI({
+			selectInput("gxQuote", "Quotes", choices=myValues$quoteChoices, selected=myValues$quoteChoices[1])
+		})
+
 		output$selMethod <- shiny::renderUI({
 			shiny::selectInput("method", "Select Inference Algorithm", choices=methods, multiple=TRUE, selected=methods)
 		})
