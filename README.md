@@ -55,8 +55,8 @@ A novel computational method and its R and web-based implementations, to perform
   # Clone the git repository
   git clone https://github.com/Greco-Lab/INfORM INfORM_clone
 
-  # Run by using runApp()
-  setwd("~/INfORM_clone")
+  # Start R session and run by using runApp()
+  setwd("./INfORM_clone")
   runApp("INfORM-app/")
 ```
 #### Dependencies and License
