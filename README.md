@@ -18,11 +18,6 @@ A novel computational method and its R and web-based implementations, to perform
   }
   
   #Install Bioconductor dependencies
-  if(!"GOSemSim" %in% rownames(installed.packages())){
-    print("Installing GOSemSim from GitHub!")
-    devtools::install_github("GuangchuangYu/GOSemSim")
-  }
-  
   source("http://bioconductor.org/biocLite.R")
   bioc_pkgs <- c("org.Hs.eg.db", "org.Mm.eg.db", "GO.db", "AnnotationDbi", "GSEABase", "minet")
   bioc_pkgs.inst <- bioc_pkgs[!(bioc_pkgs %in% rownames(installed.packages()))]
@@ -34,6 +29,12 @@ A novel computational method and its R and web-based implementations, to perform
       biocLite(pkg, suppressUpdates=TRUE)
       print("Installed!!!")
     }
+  }
+  
+  #Install latest version of GOSemSim from GitHub
+  if(!"GOSemSim" %in% rownames(installed.packages())){
+    print("Installing GOSemSim from GitHub!")
+    devtools::install_github("GuangchuangYu/GOSemSim")
   }
 ```
 
@@ -57,6 +58,7 @@ A novel computational method and its R and web-based implementations, to perform
 
   # Start R session and run by using runApp()
   setwd("./INfORM_clone")
+  library(shiny)
   runApp("INfORM-app/")
 ```
 #### Dependencies and License
