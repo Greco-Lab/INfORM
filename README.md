@@ -32,10 +32,8 @@ A novel computational method and its R and web-based implementations, to perform
   }
   
   #Install latest version of GOSemSim from GitHub
-  if(!"GOSemSim" %in% rownames(installed.packages())){
-    print("Installing GOSemSim from GitHub!")
-    devtools::install_github("GuangchuangYu/GOSemSim")
-  }
+  print("Installing GOSemSim from GitHub!")
+  devtools::install_github("GuangchuangYu/GOSemSim")
 ```
 
 #### How to run INfORM from GitHub
