@@ -35,7 +35,7 @@ combineList <- function(...){
 
 utils::globalVariables(names=c("GO.db"))
 
-#Get lock to avoid current access by different threads 
+#Get lock to avoid current access by different threads
 getLock <- function(tmpDir, logFile){
         lockDir <- paste0(tmpDir, "/", gsub(".txt", "", logFile), "_lock/")
         lockChk <- FALSE
@@ -45,7 +45,7 @@ getLock <- function(tmpDir, logFile){
         }
 }
 
-#Delete the lock directory and remove lock 
+#Delete the lock directory and remove lock
 unLock <- function(tmpDir, logFile){
         lockDir <- paste0(tmpDir, "/", gsub(".txt", "", logFile), "_lock/")
         unlink(c(lockDir), recursive=TRUE)
@@ -54,7 +54,7 @@ unLock <- function(tmpDir, logFile){
 #' Infer correlation matrix from gene expression table by using mutual information.
 #'
 #' calculate_correlation_matrix uses the MINET package to create correlation matrix by mutual information method. User can specify
-#' the inference algorithms, correlation calculation methods and discretization methods to create mutiple combinations of parameters 
+#' the inference algorithms, correlation calculation methods and discretization methods to create mutiple combinations of parameters
 #' for multiple runs of minet(). Multiple inferences are unified by taking median to create a consensus matrix.
 #'
 #' @importFrom parallel detectCores makeCluster stopCluster
@@ -218,11 +218,11 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, summ_b
             print(paste0("Making ", summ_by, " Matrix..."))
             arr1<-abind::abind(llGX,along=3)
             if(summ_by=="median"){
-                matGX <- apply(arr1,c(1,2),median)
+                matGX <- apply(arr1,c(1,2),function(x){median(x, na.rm=TRUE)})
             }else if(summ_by=="mean"){
-                matGX <- apply(arr1,c(1,2),mean)
+                matGX <- apply(arr1,c(1,2),function(x){mean(x, na.rm=TRUE)})
             }else if(summ_by=="max"){
-                matGX <- apply(arr1,c(1,2),max)
+                matGX <- apply(arr1,c(1,2),function(x){max(x, na.rm=TRUE)})
             }
         }else{
             cat("Only one matrix, not computing ", summ_by, " matrix!\n")
@@ -236,7 +236,7 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, summ_b
 #' Create edge ranked inference matrix by combining information from different inference algorithms with the help of internal function calculate_correlation_matrix().
 #'
 #' get_ranked_consensus_matrix uses the internal function calculate_correlation_matrix() to get a single consensus matrix per inference algorithm. User can specify
-#' the inference algorithms, correlation calculation methods and discretization methods, a combination of parameters will be created per inference algorithm to run calculate_correlation_matrix(), 
+#' the inference algorithms, correlation calculation methods and discretization methods, a combination of parameters will be created per inference algorithm to run calculate_correlation_matrix(),
 #' this will generate a consensus matrix per inference algorithm. The consesus matrices from different inference algorithms are used to create a single binary matrix by rank based selection of edges.
 #'
 #' @importFrom TopKLists Borda
@@ -293,7 +293,7 @@ get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL,
 
                         print(paste0("Get ranked edges for method : ", mthd))
                         mat_ll[[mthd]][lower.tri(mat_ll[[mthd]], diag=TRUE)] <- NA
-                                
+
                         edge_df <- as.data.frame(as.table(mat_ll[[mthd]]))
                         print("Minet edge_df before:")
                         print(str(edge_df))
@@ -311,7 +311,7 @@ get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL,
                 for(i in c(1:length(matList))){
                         itmName <- paste0("user_", i)
                         matList[[i]][lower.tri(matList[[i]], diag=TRUE)] <- NA
-                                
+
                         edge_df <- as.data.frame(as.table(matList[[i]]))
                         print("User edge_df before:")
                         print(str(edge_df))
@@ -426,11 +426,11 @@ get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL,
 #' @return A list containing a vector of consensus edge ranks and a binary symmetrix matrix representing the edge rank matrix.
 #' @examples
 #' \dontrun{
-#' parse_edge_rank_matrix <- function(edge_rank_matrix, 
-#' edge_selection_strategy="default", 
-#' mat_weights="rank", 
-#' topN=10, 
-#' debug_output=FALSE, 
+#' parse_edge_rank_matrix <- function(edge_rank_matrix,
+#' edge_selection_strategy="default",
+#' mat_weights="rank",
+#' topN=10,
+#' debug_output=FALSE,
 #' updateProgress=NULL)
 #' }
 #' @keywords internal
@@ -589,7 +589,7 @@ annotate_iGraph <- function(iG){
 #' @param iGraph igraph object created from the binary consensus matrix computed by using get_ranked_consensus_binary_matrix() function.
 #' @param gx_data_table Gene expression table as a data frame, must have gene symbols as rownames and sample names as colnames.
 #' @param dgx_table Differential Gene expression table as a data frame, must have gene symbols as rownames but should not have colnames.
-#' @param pos_cor_color Valid color name or hex code for genes positively associated with differential gene expression. 
+#' @param pos_cor_color Valid color name or hex code for genes positively associated with differential gene expression.
 #' @param pos_cor_highlight_color Valid color name or hex code for highlighted genes positively associated with differential gene expression.
 #' @param neg_cor_color Valid color name or hex code for genes negatively associated with differential gene expression.
 #' @param neg_cor_highlight_color Valid color name or hex code for highlighted genes negatively associated with differential gene expression.
@@ -660,9 +660,9 @@ set_vertex_color <- function(iGraph, gx_data_table, dgx_table, pos_cor_color="sa
 
 #' Set general edge colors and also colors to highlight the identified important edges.
 #'
-#' set_edge_color assigns color and highlight color to the edges. User provided gene expression table is used to compute correlation 
-#' between the genes, edges with positive value of correlation are assigned specific colors and edges with negative value of correlation 
-#' are assigned specific colors. The highlight colors are used to faciliate sub-network extraction and highlighting the seed genes used for 
+#' set_edge_color assigns color and highlight color to the edges. User provided gene expression table is used to compute correlation
+#' between the genes, edges with positive value of correlation are assigned specific colors and edges with negative value of correlation
+#' are assigned specific colors. The highlight colors are used to faciliate sub-network extraction and highlighting the seed genes used for
 #' extracting the sub-networks.
 #'
 #' @importFrom igraph get.edges edge_attr E
@@ -670,7 +670,7 @@ set_vertex_color <- function(iGraph, gx_data_table, dgx_table, pos_cor_color="sa
 #'
 #' @param iGraph igraph object created from the binary consensus matrix computed by using get_ranked_consensus_binary_matrix() function.
 #' @param gx_data_table Gene expression table as a data frame, must have gene symbols as rownames and sample names as colnames.
-#' @param pos_cor_color Valid color name or hex code for edges showing positive correlation between genes. 
+#' @param pos_cor_color Valid color name or hex code for edges showing positive correlation between genes.
 #' @param pos_cor_highlight_color Valid color name or hex code for highlighted edges showing positive correlation between genes.
 #' @param neg_cor_color Valid color name or hex code for edges showing negative correlation between genes.
 #' @param neg_cor_highlight_color Valid color name or hex code for highlighted edges showing negative correlation between genes.
@@ -715,9 +715,9 @@ set_edge_color <- function(iGraph, gx_data_table, pos_cor_color="salmon", pos_co
 
 #' Get top ranked candidates computed by Borda on the provided list of attributes and the cutoff.
 #'
-#' get_ranked_gene_list uses the annotation associated with each vertex to rank them and generated a list of vertices names ordered by rank. 
-#' By default the annotations calculated by INfORM are "betweenness", "cc", "degree", "eccentricity", "closeness" & "eigenvector". The vertices are 
-#' ranked by each annotation separately nad then the ranks are unified by means of Borda(). User must provide the annotations to use in ranking scheme, 
+#' get_ranked_gene_list uses the annotation associated with each vertex to rank them and generated a list of vertices names ordered by rank.
+#' By default the annotations calculated by INfORM are "betweenness", "cc", "degree", "eccentricity", "closeness" & "eigenvector". The vertices are
+#' ranked by each annotation separately nad then the ranks are unified by means of Borda(). User must provide the annotations to use in ranking scheme,
 #' if the user has custom annotations such as "score" for differential gene expression then it can also be used for ranking.
 #'
 #' @importFrom igraph get.vertex.attribute
@@ -747,7 +747,7 @@ get_ranked_gene_list <- function(iGraph, rank_list_attr, debug_output=FALSE){
         if(is.null(rank_list_attr)){
                 stop("List of attributes for ranking is NULL!")
         }
-        
+
         attrOrdMat <- list()
         for(a in 1:length(rank_list_attr)){
 		val_ord=TRUE
@@ -802,7 +802,7 @@ get_sub_graph <- function(iGraph, selected_vertices, vertex_level=1, shortest_pa
 	{
 		tmpVertices <- c(tmpVertices, theHood[[i]])
 	}
-	
+
 	#print("Getting Shortest Paths!")
 	for(i in 1:length(selected_vertices))
 	{
@@ -822,10 +822,10 @@ get_sub_graph <- function(iGraph, selected_vertices, vertex_level=1, shortest_pa
 	vertices4SubGraph <- unique(tmpVertices)
 	subiGraph <- induced.subgraph(graph=iGraph, vids=vertices4SubGraph)
 	print(list.vertex.attributes(subiGraph))
-	
+
 	#vertices2Highlight <- which(get.vertex.attribute(subiGraph,"name") %in% selected_vertices)
 	#igraph::V(subiGraph)$color[vertices2Highlight] <- igraph::V(subiGraph)$highlightcolor[vertices2Highlight]
-	subiGraph 
+	subiGraph
 }
 
 #' Get modules from the main igraph.
@@ -853,7 +853,7 @@ get_modules <- function(iGraph, method="walktrap")
 	"spinglass" = igraph::cluster_spinglass(iGraph),
 	"louvain" = igraph::cluster_louvain(iGraph),
 	"greedy" = igraph::cluster_fast_greedy(iGraph)
-       ) 
+       )
 }
 
 #' Annotate modules identified from the main igraph.
@@ -898,7 +898,7 @@ annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv=NULL, rl.lfc=NULL,
 	res_ll <- list()
 	res_ll[["names"]] <- igraph::communities(modules)
 
-	#Filter modules by size	
+	#Filter modules by size
 	len_vec <- as.vector(unlist(lapply(res_ll[["names"]], length)))
 	idx <- which(len_vec<min_mod_size)
 	if(length(idx)>0){
@@ -916,7 +916,7 @@ annotate_modules <- function(iGraph, modules, rl, rl.c, rl.pv=NULL, rl.lfc=NULL,
 			res <- res[res$ease<=p_value,]
 			if(nrow(res)==0)
 			return(NULL)
-		
+
 			selectAnnDF <- AnnotationDbi::select(GO.db, keys=as.vector(res$ID), columns=c("TERM", "ONTOLOGY"), keytype="GOID")
 			#res <- cbind(selectAnnDF, res[,c(3,2)])
 			#colnames(res)[c(4,5)] <- c("Score", "Genes")
@@ -1089,10 +1089,10 @@ get_jaccard <- function(set1, set2){
 get_jaccard_sim <- function(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg.db", simMeasure="Rel"){
         if(is.null(set1) || is.null(set2))
         return(NULL)
-        
+
 	setU <- unique(c(set1[,"GOID"], set2[,"GOID"]))
 	goVec <- setNames(rep(0, length(setU)), setU)
-	
+
 	GODB_vals = AnnotationDbi::select(GO.db, keys(GO.db, "GOID"), c("TERM", "ONTOLOGY"))
         GODB_vals_ll <- list()
         GODB_vals_ll[["BP"]] <- GODB_vals[GODB_vals$ONTOLOGY=="BP",c("GOID", "TERM")]
@@ -1104,16 +1104,16 @@ get_jaccard_sim <- function(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg
                 #print(paste0("###### Computing For Ontology - ", typ, ' ######'))
                 ont1 <- set1[set1$ONTOLOGY == typ,]
                 ont2 <- set2[set2$ONTOLOGY == typ,]
-                
+
                 if(nrow(ont1)==0 || nrow(ont2)==0)
                 next
-                
+
 		if(is.null(IC_ll) || length(which(names(IC_ll) %in% typ))==0){
 			d <- GOSemSim::godata(annDB, ont=typ, computeIC=TRUE)
 		}else{
 			d <- IC_ll[[typ]]
 		}
-                
+
                 ont_ids1 <- as.character(ont1[which(ont1$GOID %in% GODB_vals_ll[[typ]]$GOID), "GOID"])
                 ont_ids2 <- as.character(ont2[which(ont2$GOID %in% GODB_vals_ll[[typ]]$GOID), "GOID"])
 
@@ -1125,7 +1125,7 @@ get_jaccard_sim <- function(set1, set2, simThr=0.6, IC_ll=NULL, annDB="org.Hs.eg
 			goVec[simID] <- 1
 		}
 	}
-	
+
 	valI <- length(which(goVec==1))
 	valU <- length(setU)
 	val <- valI/valU
@@ -1155,7 +1155,7 @@ get_between_GO_sim <- function(mod_ll1, mod_ll2, prefix1=NULL, prefix2=NULL, IC_
 	ae_list2 <- mod_ll2[["ae"]]
 	l1 <- length(ae_list1)
 	l2 <- length(ae_list2)
-	
+
 	#if(is.null(prefix1))
 	#prefix1 <- "A"
 	#
@@ -1168,16 +1168,16 @@ get_between_GO_sim <- function(mod_ll1, mod_ll2, prefix1=NULL, prefix2=NULL, IC_
 	names2 <- paste0(prefix2, names(ae_list2))
 	#print(names2)
 	names(ae_list2) <- names2
-	
+
 	res <- matrix(data=rep(0, l1*l2), nrow=l1, ncol=l2, dimnames=list(names1, names2))
 	for(m1 in names(ae_list1)){
 		if(is.null(ae_list1[[m1]]))
 		next
-		
+
 		for(m2 in names(ae_list2)){
 			if(is.null(ae_list2[[m2]]))
 			next
-		
+
 			res[m1,m2] <- get_jaccard_sim(ae_list1[[m1]], ae_list2[[m2]], IC_ll=IC_ll)
 			#print(res[m1,m2])
 		}
@@ -1228,18 +1228,18 @@ plot_sim_heatmap <- function(hSim, rSim=NULL, cSim=NULL){
 	rDend <- NULL
 	if(!is.null(rSim)){
 		rDat <- rSim
-		rDat <- rDat[rowSums(rDat)>0,] 
+		rDat <- rDat[rowSums(rDat)>0,]
 		rDat <- rDat[,colSums(rDat)>0]
 		rd <- stats::as.dist(1-rDat)
 		rc <- stats::hclust(rd)
 		rDend <- stats::as.dendrogram(rc)
-	
+
 	}
 
 	cDend <- NULL
 	if(!is.null(cSim)){
 		cDat <- cSim
-		cDat <- cDat[rowSums(cDat)>0,] 
+		cDat <- cDat[rowSums(cDat)>0,]
 		cDat <- cDat[,colSums(cDat)>0]
 		cd <- stats::as.dist(1-t(cDat))
 		cc <- stats::hclust(cd)
@@ -1247,7 +1247,7 @@ plot_sim_heatmap <- function(hSim, rSim=NULL, cSim=NULL){
 	}
 
 	hot_data <- hSim
-	hot_data <- hot_data[rowSums(hot_data)>0,] 
+	hot_data <- hot_data[rowSums(hot_data)>0,]
 	hot_data <- hot_data[,colSums(hot_data)>0]
 	hot_data <- 1-hot_data
 
@@ -1391,7 +1391,7 @@ progressive_enrichment <- function(genelists, l1, l2, l3)
 	l1_fltr <- l1[which(l1$User_Genes >=3), c(1,3,7)]
 	l2_fltr <- l2[which(l2$User_Genes >=3), c(1,3,7)]
 	l3_fltr <- l3[which(l3$User_Genes >=3), c(1,3,7)]
-	
+
 	print("~~ Creating Score=round(li_fltr$User_Genes/(length(genelists$li)/length(li_fltr$ID))) ~~")
 	l1_fltr$Score <- round(l1_fltr$User_Genes/(length(genelists[[1]])/length(l1_fltr$ID)))
 	l2_fltr$Score <- round(l2_fltr$User_Genes/(length(genelists[[2]])/length(l2_fltr$ID)))
@@ -1409,7 +1409,7 @@ progressive_enrichment <- function(genelists, l1, l2, l3)
 	all_fltr_union <- Reduce(function(...) merge(..., all=TRUE), list(l1_fltr, l2_fltr, l3_fltr))
 	all_fltr_union[is.na(all_fltr_union)] <- 0
 	all_fltr_union <- all_fltr_union[which(all_fltr_union$L1_Score <= all_fltr_union$L2_Score & all_fltr_union$L2_Score <= all_fltr_union$L3_Score),]
-	
+
 	all_fltr_union_score <- cbind(all_fltr_union[1], round(rowSums(all_fltr_union[c("L1_Score","L2_Score","L3_Score")])))
 	colnames(all_fltr_union_score) <- c("ID", "Score")
 	all_fltr_union_score <- cbind(all_fltr_union_score, unname(sapply(all_fltr_union_score$ID, function(x) l3[which(l3$ID == x),2])))
@@ -1421,8 +1421,8 @@ progressive_enrichment <- function(genelists, l1, l2, l3)
 
 #' Summarize the GO information from the progressively enriched GO table.
 #'
-#' go_summarization takes as input the result from progressive_enrichment() function and segregrates the GO terms by type "BP", "CC" and "MF". 
-#' For each type of GOs the semantic similarity is computed to summarize and cluster GO terms. The clustered GOs are reported as data frame, 
+#' go_summarization takes as input the result from progressive_enrichment() function and segregrates the GO terms by type "BP", "CC" and "MF".
+#' For each type of GOs the semantic similarity is computed to summarize and cluster GO terms. The clustered GOs are reported as data frame,
 #' GO term with the highest score in each cluster is chosen as the representative of that cluster.
 #'
 #' @importFrom AnnotationDbi select keys
@@ -1499,13 +1499,13 @@ go_summarization <- function(enriched_GO_DF, score_col="EASE_Score", annDB="org.
                 #print(str(simsem_matrix))
                 #print(valRowIdx)
                 #print(valColIdx)
-		
+
 		simClust <- stats::hclust(stats::as.dist(1-simsem_matrix))
 
 		cut_height <- treeHeight
 		simClust_cut <- stats::cutree(simClust, h=cut_height)
 		simClust_DF[[typ]] <- data.frame(ID=character(), TERM=character(), Score=integer(), Representative=character(), stringsAsFactors=FALSE)
-		
+
 		for(i in unique(simClust_cut)){
 			memberIDs <- names(simClust_cut[simClust_cut == i])
 			#selRow <- ont[which(ont$GOID %in% memberIDs), c("TERM", "Score")]
@@ -1594,8 +1594,8 @@ get_visNetwork <- function(iG, plot_layout="nicely", vBorderColor="black", vShap
     visLayout <- paste0("layout_", plot_layout)
     vNet <- visNetwork::visIgraph(iG) %>%
         visNetwork::visIgraphLayout(layout = visLayout) %>%
-        #visNetwork::visOptions(highlightNearest = list(enabled = FALSE, hover = FALSE)) %>% 
-        visNetwork::visOptions(highlightNearest = list(enabled = TRUE, hover = TRUE, degree = degDepth)) %>% 
+        #visNetwork::visOptions(highlightNearest = list(enabled = FALSE, hover = FALSE)) %>%
+        visNetwork::visOptions(highlightNearest = list(enabled = TRUE, hover = TRUE, degree = degDepth)) %>%
         visNetwork::visEvents(selectNode = "function(properties) {
             url='http://www.ncbi.nlm.nih.gov/gene?term=('+ properties.nodes +'%5BGene%20Name%5D)%20AND%20%22homo%20sapiens%22%5BOrganism%5D'
             window.open(url);}"
@@ -1661,12 +1661,12 @@ get_master_gene_table <- function(ig, rankedGenes, modLL, orgDB="org.Hs.eg.db"){
 		if(length(idx)>0){
 			idx1 <- which(is.na(mapped_df[idx, "MEMBERSHIP"]))
 			idx2 <- which(!is.na(mapped_df[idx, "MEMBERSHIP"]))
-			
+
 			if(length(idx1)>0){
 				tmpIdx <- idx[idx1]
 				mapped_df[tmpIdx, "MEMBERSHIP"] <- modName
 			}
-			
+
 			if(length(idx2)>0){
 				tmpIdx <- idx[idx2]
 				mapped_df[tmpIdx, "MEMBERSHIP"] <- paste(mapped_df[tmpIdx, "MEMBERSHIP"], modName, sep=",")
@@ -1709,10 +1709,10 @@ get_mod_gene_tables <- function(ig, rankedGenes, modLL, orgDB="org.Hs.eg.db"){
 		modName <- modNames[i]
 		print("modName:")
 		print(modName)
-		
+
 		mapped_df <- AnnotationDbi::select(orgDB, keys=geneLL[[i]], columns=c("ENSEMBL","ENTREZID","GENENAME"), keytype="SYMBOL")
 		tmpDF <- cbind(GENE_RANK=sapply(mapped_df$SYMBOL, function(x) which(rankedGenes %in% x)), mapped_df, SCORE=sapply(mapped_df$SYMBOL, function(x) V(ig)$score[which(V(ig)$name %in% x)]), PValue=sapply(mapped_df$SYMBOL, function(x) V(ig)$pval[which(V(ig)$name %in% x)]), LFC=sapply(mapped_df$SYMBOL, function(x) V(ig)$lfc[which(V(ig)$name %in% x)]))
-		
+
 		mapped_df <- tmpDF[order(tmpDF$GENE_RANK),]
 		mapped_df_ll[[modName]] <- mapped_df
 	}
@@ -1739,7 +1739,7 @@ resolve_ig_union_attrs <- function(ig_union, vertex_attr_names, edge_attr_names)
 	#Resolve Vertex Attributes
 	ig_union_df <- igraph::as_data_frame(ig_union, what="vertices")
 	colIdxNames <- NULL
-	
+
 	#print(paste0("Vertex Attrs : ", vertex_attr_names))
 	for(attr in vertex_attr_names){
 		#print(paste0("Resolving Attr : ", attr))
@@ -1750,20 +1750,20 @@ resolve_ig_union_attrs <- function(ig_union, vertex_attr_names, edge_attr_names)
 		igraph::vertex_attr(ig_union, name=attr) <- resAttrVal
 	}
 	#print(list.vertex.attributes(ig_union))
-	
+
 	#Remove redundant attributes
 	#print("Will Remove Following:")
 	#print(colIdxNames)
-	
+
 	for(nm in colIdxNames){
 		#print(paste0("Removing Attr : " , nm))
 		ig_union <- igraph::delete_vertex_attr(ig_union, nm)
 	}
-	
+
 	#Resolve Edge Attributes
 	ig_union_df <- igraph::as_data_frame(ig_union, what="edges")
 	colIdxNames <- NULL
-	
+
 	for(attr in edge_attr_names){
 		colIdx <- grep(paste0("^", attr, ".*"), colnames(ig_union_df))
 		colIdxNames <- c(colIdxNames, colnames(ig_union_df)[colIdx])
@@ -1771,7 +1771,7 @@ resolve_ig_union_attrs <- function(ig_union, vertex_attr_names, edge_attr_names)
 		igraph::edge_attr(ig_union, name=attr) <- resAttrVal
 	}
 	#print(list.edge.attributes(ig_union))
-	
+
 	#Remove redundant attributes
 	for(nm in colIdxNames){
 		print(paste0("Removing Attr : " , nm))
