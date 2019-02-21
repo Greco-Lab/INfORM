@@ -3,6 +3,16 @@
 
 A novel computational method and its R and web-based implementations, to perform inference of gene network from transcriptome data and prioritization of key genes with central functional and topological role in the network.
 
+## Running the INfORM Docker image (suggested)
+
+If you don't have docker installed on your system you can install it by following the instructions at  https://www.docker.com/get-docker.
+
+The INfORM docker image is available at https://hub.docker.com/r/grecolab/inform
+
+
+## Using INfORM source from GitHub
+
+
 #### Install Dependencies
 ```R
   #Install CRAN dependencies
