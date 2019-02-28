@@ -3,6 +3,10 @@
 
 A novel computational method and its R and web-based implementations, to perform inference of gene network from transcriptome data and prioritization of key genes with central functional and topological role in the network.
 
+Reference paper: Veer Singh Marwah, Pia Anneli Sofia Kinaret, Angela Serra, Giovanni Scala, Antti Lauerma, Vittorio Fortino, Dario Greco; INfORM: Inference of NetwOrk Response Modules, Bioinformatics, Volume 34, Issue 12, 15 June 2018, Pages 2136–2138
+
+More information at: https://academic.oup.com/bioinformatics/article/34/12/2136/4841712
+
 ## Running the INfORM Docker image (suggested)
 
 If you don't have docker installed on your system you can install it by following the instructions at  https://www.docker.com/get-docker.
