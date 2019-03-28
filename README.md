@@ -20,7 +20,7 @@ The INfORM docker image is available at https://hub.docker.com/r/grecolab/inform
 #### Install Dependencies
 ```R
   #Install CRAN dependencies
-  cran_pkgs <- c("V8", "RSQLite", "TopKLists", "doParallel", "foreach", "igraph", "plyr", "shiny", "shinyjs", "shinyBS", "shinydashboard", "colourpicker", "DT", "R.utils", "treemap", "visNetwork", "abind", "radarchart", "randomcoloR", "Rserve", "WriteXLS", "gplots", "ggplot2", "devtools")
+  cran_pkgs <- c("V8", "RSQLite", "TopKLists", "doParallel", "foreach", "igraph", "plyr", "shiny", "shinyjs", "shinyBS", "shinydashboard", "colourpicker", "DT", "R.utils", "treemap", "visNetwork", "abind", "radarchart", "randomcoloR", "Rserve", "WriteXLS", "gplots", "ggplot2", "devtools", "flock")
   cran_pkgs.inst <- cran_pkgs[!(cran_pkgs %in% rownames(installed.packages()))]
   if(length(cran_pkgs.inst)>0){
     print(paste0("Missing ", length(cran_pkgs.inst), " CRAN Packages:"))
@@ -30,7 +30,7 @@ The INfORM docker image is available at https://hub.docker.com/r/grecolab/inform
       print("Installed!!!")
     }
   }
-  
+
   #Install Bioconductor dependencies
   source("http://bioconductor.org/biocLite.R")
   bioc_pkgs <- c("org.Hs.eg.db", "org.Mm.eg.db", "GO.db", "AnnotationDbi", "GSEABase", "minet")
@@ -44,7 +44,7 @@ The INfORM docker image is available at https://hub.docker.com/r/grecolab/inform
       print("Installed!!!")
     }
   }
-  
+
   #Install latest version of GOSemSim from GitHub
   print("Installing GOSemSim from GitHub!")
   devtools::install_github("GuangchuangYu/GOSemSim")

@@ -18,6 +18,7 @@ suppressMessages(library(visNetwork))
 suppressMessages(library(radarchart))
 suppressMessages(library(WriteXLS))
 suppressMessages(library(gplots))
+suppressMessages(library(flock))
 
 net_attr <- c("betweenness", "cc", "degree", "eccentricity", "closeness", "eigenvector")
 
@@ -34,22 +35,6 @@ combineList <- function(...){
 }
 
 utils::globalVariables(names=c("GO.db"))
-
-#Get lock to avoid current access by different threads
-getLock <- function(tmpDir, logFile){
-        lockDir <- paste0(tmpDir, "/", gsub(".txt", "", logFile), "_lock/")
-        lockChk <- FALSE
-        while(lockChk==FALSE){
-                Sys.sleep(1)
-                lockChk <- dir.create(lockDir, showWarnings=FALSE)
-        }
-}
-
-#Delete the lock directory and remove lock
-unLock <- function(tmpDir, logFile){
-        lockDir <- paste0(tmpDir, "/", gsub(".txt", "", logFile), "_lock/")
-        unlink(c(lockDir), recursive=TRUE)
-}
 
 #' Infer correlation matrix from gene expression table by using mutual information.
 #'
@@ -151,14 +136,15 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, summ_b
         #}
         logDir <- "./"
         env <- environment()
-	parallel::clusterExport(cl, list("getLock", "unLock", "logDir"), envir=env)
+	parallel::clusterExport(cl, list("logDir"), envir=env)
 
+	lockFile <- tempfile()
 	out.tmp.list <- foreach::foreach(i=1:length(parList)) %dopar% {
-		#capture.output(print("Start For Each"), file="minet-log.txt", append=T)
+		#testLog <- tempfile(tmpdir=logDir, pattern="minet-test", fileext=".txt")
+		#utils::capture.output(print("Start For Each"), file=testLog, append=TRUE)
 		mt <- parList[[i]]$mt
 		est <- parList[[i]]$est
 		disc <- parList[[i]]$disc
-		#print(parList[[i]]$mt)
 
 		#if((est == "mi.empirical" | est == "mi.mm" | est == "mi.shrink" | est == "mi.sg") & disc == "none") {
 		#	miMat <- -1
@@ -166,30 +152,24 @@ calculate_correlation_matrix <- function(gx_table, iMethods, iEst, iDisc, summ_b
 		#}
 		#else{
                 if(debug_output==TRUE){
-                        getLock(tmpDir=logDir, logFile="minet-log.txt")
+												locked <- flock::lock(lockFile)
                         utils::capture.output(print(paste("----",mt,est,disc, sep="__")), file="minet-log.txt", append=TRUE)
-                        unLock(tmpDir=logDir, logFile="minet-log.txt")
+												flock::unlock(locked)
                 }
 
-                getLock(tmpDir=logDir, logFile="minet-to-run.txt")
+								locked <- flock::lock(lockFile)
                 utils::capture.output(print(paste0("Iteration-", i, ": ", mt, "-", est, "-", disc)), file="minet-to-run.txt", append=TRUE)
-                unLock(tmpDir=logDir, logFile="minet-to-run.txt")
-                #print("Before Updating text")
-                #if (is.function(updateProgress)){
-                #	text <- paste("MINET: ", mt, "-", est, "-", disc, "-", sep="")
-                #	print("Updating text")
-                #	updateProgress(detail = text)
-                #}
+								flock::unlock(locked)
 
+								#utils::capture.output(print(paste0("Iteration-", i, ": ", mt, "-", est, "-", disc)), file=testLog, append=TRUE)
                 ptm <- proc.time()
                 miMat <- minet::minet(stdGX, method=mt, estimator=est, disc=disc)
 
-                getLock(tmpDir=logDir, logFile="minet-completed.txt")
+								locked <- flock::lock(lockFile)
                 utils::capture.output(print(paste0("Iteration-", i, ", ", mt, "-", est, "-", disc, ": ", "MINET Execution Time - ", round(proc.time() - ptm)[3], " sec")), file="minet-completed.txt", append=TRUE)
-                #capture.output(print(proc.time() - ptm), file="minet-log.txt", append=T)
-                unLock(tmpDir=logDir, logFile="minet-completed.txt")
+								flock::unlock(locked)
 
-
+								#utils::capture.output(print(paste0("Iteration-", i, ", ", mt, "-", est, "-", disc, ": ", "MINET Execution Time - ", round(proc.time() - ptm)[3], " sec")), file=testLog, append=TRUE)
                 miMatName <- paste(mt,est,disc,sep="__")
 		#}
 		out.list <- list("mat"=miMat, "name"=miMatName)
