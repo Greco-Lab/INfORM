@@ -19,6 +19,23 @@ The INfORM docker image is available at https://hub.docker.com/r/grecolab/inform
 
 #### Install Dependencies
 ```R
+
+  #Universal Bioconductor package installation function
+  install.bioc <- function(pkg){
+    vers <- getRversion()
+    if (vers >= "3.6"){
+      if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+      BiocManager::install(pkg)
+    }else{
+      if (!requireNamespace("BiocInstaller", quietly = TRUE)){
+        source("https://bioconductor.org/biocLite.R")
+        biocLite(pkg, suppressUpdates=TRUE)
+      }else{
+        BiocInstaller::biocLite(pkg, suppressUpdates=TRUE)
+      }
+    }
+  }
+
   #Install CRAN dependencies
   cran_pkgs <- c("V8", "RSQLite", "TopKLists", "doParallel", "foreach", "igraph", "plyr", "shiny", "shinyjs", "shinyBS", "shinydashboard", "colourpicker", "DT", "R.utils", "treemap", "visNetwork", "abind", "radarchart", "randomcoloR", "Rserve", "WriteXLS", "gplots", "ggplot2", "devtools", "flock")
   cran_pkgs.inst <- cran_pkgs[!(cran_pkgs %in% rownames(installed.packages()))]
@@ -32,15 +49,13 @@ The INfORM docker image is available at https://hub.docker.com/r/grecolab/inform
   }
 
   #Install Bioconductor dependencies
-  source("http://bioconductor.org/biocLite.R")
   bioc_pkgs <- c("org.Hs.eg.db", "org.Mm.eg.db", "GO.db", "AnnotationDbi", "GSEABase", "minet")
   bioc_pkgs.inst <- bioc_pkgs[!(bioc_pkgs %in% rownames(installed.packages()))]
   if(length(bioc_pkgs.inst)>0){
-    source("http://bioconductor.org/biocLite.R")
     print(paste0("Missing ", length(bioc_pkgs.inst), " Bioconductor Packages:"))
     for(pkg in bioc_pkgs.inst){
       print(paste0("Installing Package:'", pkg, "'..."))
-      biocLite(pkg, suppressUpdates=TRUE)
+      install.bioc(pkg)
       print("Installed!!!")
     }
   }
