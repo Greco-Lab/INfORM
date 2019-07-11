@@ -18,10 +18,10 @@ The INfORM docker image is available at https://hub.docker.com/r/grecolab/inform
 
 
 #### Install OS Dependencies
-Pandoc - [https://pandoc.org/installing.html](https://pandoc.org/installing.html)
-Latex Compiling - [http://www.tug.org/texlive/](http://www.tug.org/texlive/)
-Perl - [https://www.perl.org/get.html](https://www.perl.org/get.html)
-Cairo - [https://cairographics.org/download/](https://cairographics.org/download/)
+Pandoc - [https://pandoc.org/installing.html](https://pandoc.org/installing.html)  
+Latex Compiling - [http://www.tug.org/texlive/](http://www.tug.org/texlive/)  
+Perl - [https://www.perl.org/get.html](https://www.perl.org/get.html)  
+Cairo - [https://cairographics.org/download/](https://cairographics.org/download/)  
 
 #### Install R Dependencies
 ```R
