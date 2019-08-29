@@ -15,13 +15,13 @@ jsCode <- 'shinyjs.plot_bg_col = function(col){
 appCSS <- "
 	.nav-tabs-custom .nav-tabs { border-top-left-radius: 3px; border-top-right-radius: 3px; }
 	.nav-tabs-custom .nav-tabs li.active { border-left: 1px #3c8dbc solid; border-right: 1px #3c8dbc solid; }
-	.nav-tabs-custom .nav-tabs li a { 
-		border-left: 1px #3c8dbc solid; 
-		border-right: 1px #3c8dbc solid; 
-		border-top: 1px #3c8dbc solid; 
+	.nav-tabs-custom .nav-tabs li a {
+		border-left: 1px #3c8dbc solid;
+		border-right: 1px #3c8dbc solid;
+		border-top: 1px #3c8dbc solid;
 		border-radius: 4px 4px 0 0;
 	}
-	.nav-tabs-custom .nav-tabs li { margin-right: 3px } 
+	.nav-tabs-custom .nav-tabs li { margin-right: 3px }
 	.nav-tabs-custom .tab-content { border: 1px #3c8dbc solid; }
 
 	//For plot height
@@ -49,7 +49,7 @@ dashboardPage(
 		   div.wrap .popover {
 			width: 700px;
 			max-width: 100%;
-		    } 
+		    }
 		'))),
 		useShinyjs(),
 		extendShinyjs(text = jsCode),
@@ -143,12 +143,12 @@ dashboardPage(
 									),
 									shinyBS::bsTooltip("import_dgx_submit", "Launch a graphical window, to configure import of differential expression data from a file!", placement="bottom")
 								),column(4,
-                                                                        selectInput("ensembleStrat", "Choose Ensemble Strategy", 
+                                                                        selectInput("ensembleStrat", "Choose Ensemble Strategy",
                                                                                 choices=c("MINET Inference"="minet",
                                                                                         "User Matrices"="user",
                                                                                         "MINET Inference + User Matrices"="minet+user"
-                                                                                ), 
-                                                                                multiple=FALSE, 
+                                                                                ),
+                                                                                multiple=FALSE,
                                                                                 selected="minet"
                                                                         )
 								)
@@ -158,11 +158,11 @@ dashboardPage(
                                                                                 column(4,
                                                                                         fileInput(inputId="mat", label="User Provided Matrices", multiple=TRUE)
                                                                                 ),column(4,
-                                                                                        selectInput("matWeights", "Edge Weight Property", 
+                                                                                        selectInput("matWeights", "Edge Weight Property",
                                                                                                 choices=c("Ranks"="rank",
                                                                                                         "Scores"="score"
-                                                                                                ), 
-                                                                                                multiple=FALSE, 
+                                                                                                ),
+                                                                                                multiple=FALSE,
                                                                                                 selected="rank"
                                                                                         )
                                                                                 )
@@ -191,20 +191,20 @@ dashboardPage(
                                                                         #uiOutput("selMethod"),
                                                                         #uiOutput("selEst"),
                                                                         #uiOutput("selDisc")
-                                                                        selectInput("method", "Select Inference Algorithm", 
+                                                                        selectInput("method", "Select Inference Algorithm",
                                                                                 choices=c("clr",
                                                                                         "aracne",
                                                                                         "mrnet",
                                                                                         "mrnetb"
-                                                                                ), 
-                                                                                multiple=TRUE, 
+                                                                                ),
+                                                                                multiple=TRUE,
                                                                                 selected=c("clr",
                                                                                         "aracne",
                                                                                         "mrnet",
                                                                                         "mrnetb"
                                                                                 )
                                                                         ),
-                                                                        selectInput("est", "Select Correlation", 
+                                                                        selectInput("est", "Select Correlation",
                                                                                 choices=c("pearson",
                                                                                         "spearman",
                                                                                         "kendall",
@@ -212,8 +212,8 @@ dashboardPage(
                                                                                         "mi.mm",
                                                                                         "mi.shrink",
                                                                                         "mi.sg"
-                                                                                ), 
-                                                                                multiple=TRUE, 
+                                                                                ),
+                                                                                multiple=TRUE,
                                                                                 selected=c("pearson",
                                                                                         "spearman",
                                                                                         "kendall",
@@ -221,15 +221,15 @@ dashboardPage(
                                                                                         "mi.mm",
                                                                                         "mi.shrink",
                                                                                         "mi.sg"
-                                                                                ) 
+                                                                                )
                                                                         ),
-                                                                        selectInput("disc", "Select Discretization Method", 
+                                                                        selectInput("disc", "Select Discretization Method",
                                                                                 choices=c("none",
                                                                                         "equalfreq",
                                                                                         "equalwidth",
                                                                                         "globalequalwidth"
-                                                                                ), 
-                                                                                multiple=TRUE, 
+                                                                                ),
+                                                                                multiple=TRUE,
                                                                                 selected=c("none",
                                                                                         "equalfreq",
                                                                                         "equalwidth",
@@ -255,15 +255,15 @@ dashboardPage(
                                                                 h4("Module Detection"),
                                                                 wellPanel(fluidRow(column(12,
                                                                         fluidRow(
-                                                                                column(4, 
-                                                                                        selectInput("modMethod", "Method", 
+                                                                                column(4,
+                                                                                        selectInput("modMethod", "Method",
                                                                                                 choices=c(
                                                                                                         "Walktrap"="walktrap",
                                                                                                         "Spinglass"="spinglass",
                                                                                                         "Louvain"="louvain",
                                                                                                         "Greedy"="greedy"
-                                                                                                ), 
-                                                                                                multiple=FALSE, 
+                                                                                                ),
+                                                                                                multiple=FALSE,
                                                                                                 selected="walktrap"
                                                                                         )
                                                                                 ),column(4,
@@ -286,30 +286,30 @@ dashboardPage(
                                                         ),column(6,
                                                                 h4("Intra Inference Algorithm Consensus"),
                                                                 wellPanel(fluidRow(column(12,
-                                                                        selectInput("summType", "Summarization Score", 
+                                                                        selectInput("summType", "Summarization Score",
                                                                                 choices=c("median",
                                                                                         "mean",
                                                                                         "max"
-                                                                                ), 
-                                                                                multiple=FALSE, 
+                                                                                ),
+                                                                                multiple=FALSE,
                                                                                 selected="median"
-                                                                        ) 
+                                                                        )
                                                                 ))),
                                                                 h4("Inter Inference Algorithm Consensus"),
                                                                 wellPanel(fluidRow(column(12,
-                                                                        selectInput("bordaScore", "Rank Aggregation Score", 
+                                                                        selectInput("bordaScore", "Rank Aggregation Score",
                                                                                 choices=c("median",
                                                                                         "mean",
                                                                                         "geo.mean",
                                                                                         "l2norm"
-                                                                                ), 
-                                                                                multiple=FALSE, 
+                                                                                ),
+                                                                                multiple=FALSE,
                                                                                 selected="median"
-                                                                        ) 
+                                                                        )
                                                                 ))),
                                                                 h4("Configure Gene Ranking"),
                                                                 wellPanel(fluidRow(column(12,
-                                                                        uiOutput("rankAttr") 
+                                                                        uiOutput("rankAttr")
                                                                 ))),
                                                                 h4("Gene Ontology Annotation Options"),
                                                                 wellPanel(fluidRow(column(4,
@@ -341,7 +341,7 @@ dashboardPage(
 		),fluidRow(column(12,
 			tabBox(
 				id="display", title="Display Area", width=12,
-				tabPanel(value="corMat_display", title="Adjacency Matrix", 
+				tabPanel(value="corMat_display", title="Adjacency Matrix",
 					fluidRow(
 						valueBoxOutput('totalGeneBox', width=3),
 						valueBoxOutput('connGeneBox', width=3),
@@ -397,7 +397,7 @@ dashboardPage(
 											fluidRow(
 												column(4,colourpicker::colourInput("vColT", "Node Color Top Ranked", value="red")),
 												column(4,colourpicker::colourInput("vColB", "Node Color Bottom Ranked", value="yellow"))
-											)       
+											)
 									       )
 									)
 								),
@@ -406,7 +406,7 @@ dashboardPage(
 										column(12,
 											h4("Layout"),
 											wellPanel(
-												selectInput("graphLayout", label="2D Graph Layout", 
+												selectInput("graphLayout", label="2D Graph Layout",
 													choices=c(
 														"Nicely"="nicely",
 														"Random"="randomly",
@@ -422,7 +422,7 @@ dashboardPage(
 														"Graphopt"="with_graphopt",
 														"LGL"="with_lgl",
 														"MDS"="with_mds"
-													), multiple=FALSE, selected="nicely") 
+													), multiple=FALSE, selected="nicely")
 											)
 										)
 									)
@@ -511,7 +511,7 @@ dashboardPage(
 							)
 						)
 					)))
-				),tabPanel(value="radar_chart", title="Module Comparison Chart", 
+				),tabPanel(value="radar_chart", title="Module Comparison Chart",
 					fluidRow(column(12,
 						div(id="radar_info", class="wrap", actionButton("radarChart_info", "Radar Chart Info", icon=icon("info-circle"))),
 						hr()
@@ -523,7 +523,7 @@ dashboardPage(
 							)
 						)
 					))
-				),tabPanel(value="enrichment_panel", title="Annotation Enrichment", 
+				),tabPanel(value="enrichment_panel", title="Annotation Enrichment",
 					fluidRow(column(12,
                                                 tabBox(
                                                         id="ann_tbox", title="", width=12,
@@ -547,10 +547,10 @@ dashboardPage(
 								)),fluidRow(column(12,
                                                                         plotOutput('simHeatmap', width="99%", height="800px")
                                                                 ))
-                                                        ) 
+                                                        )
                                                 )
                                         ))
-				),tabPanel(value="rank_table", title="Rank Table", 
+				),tabPanel(value="rank_table", title="Rank Table",
 					fluidRow(column(12,
 						box(title="Download & Export", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
 							downloadButton('downloadRankDT', label='Export Ranked Gene Tables')
@@ -559,7 +559,7 @@ dashboardPage(
 					)),fluidRow(column(12,
 						DT::dataTableOutput('rankDT')
 					))
-				),tabPanel(value="res_mod", title="Response Module Optimization", 
+				),tabPanel(value="res_mod", title="Response Module Optimization",
                                         fluidRow(column(3,
                                                         uiOutput("selOptMod")
                                                 ),column(3,
@@ -589,7 +589,7 @@ dashboardPage(
                                                                                 )
                                                                         )
                                                                 ))
-                                                        ),tabPanel(value="tile_plot", title="GO Enrichment Tile Plot", 
+                                                        ),tabPanel(value="tile_plot", title="GO Enrichment Tile Plot",
                                                                 fluidRow(column(12,
 									box(title="Download & Export", status="success", solidHeader=TRUE, collapsible=TRUE, collapsed=TRUE, width=4,
 										downloadButton('downloadTilePlot', label='Export Tileplots')
@@ -613,4 +613,3 @@ dashboardPage(
 		))
 	)
 )
-
