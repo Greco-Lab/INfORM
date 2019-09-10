@@ -1129,7 +1129,9 @@ shinyServer(
 				paste("network_", Sys.Date(), '.', input$graphExportFormat, sep='')
 			},
 			content = function(con){
-				igraph::write_graph(myValues$iGraph, con, format=input$graphExportFormat)
+				#igraph::write_graph(myValues$iGraph, con, format=input$graphExportFormat)
+				localIGraph <- myValues$iGraph_dynamic()
+				igraph::write_graph(localIGraph, con, format=input$graphExportFormat)
 			}
 		)
 

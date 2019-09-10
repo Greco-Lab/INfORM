@@ -512,10 +512,10 @@ get_iGraph <- function(adj_mat){
         igraph::vertex_attr(iG, name="eigenvector") <- as.vector(igraph::eigen_centrality(iG)$vector)
         igraph::vertex_attr(iG, name="cc") <- igraph::transitivity(iG, type="local", isolates="zero")
 
-        igraph::vertex_attr(iG, name="color") <- "lightgray"
-        igraph::vertex_attr(iG, name="highlightcolor") <- "darkgray"
-        igraph::edge_attr(iG, name="color") <- "lightgray"
-        igraph::edge_attr(iG, name="highlightcolor") <- "darkgray"
+        igraph::vertex_attr(iG, name="color") <- "#D3D3D3"
+        igraph::vertex_attr(iG, name="highlightcolor") <- "#A9A9A9"
+        igraph::edge_attr(iG, name="color") <- "#D3D3D3"
+        igraph::edge_attr(iG, name="highlightcolor") <- "#A9A9A9"
 
         print(igraph::list.vertex.attributes(iG))
         iG
@@ -544,17 +544,17 @@ annotate_iGraph <- function(iG){
         edge_attr_list <- igraph::list.edge.attributes(iG)
 
         if(!("color" %in% vertex_attr_list)){
-                igraph::vertex_attr(iIG, name="color") <- "lightgray"
+                igraph::vertex_attr(iIG, name="color") <- "#D3D3D3"
         }
         if(!("highlightcolor" %in% vertex_attr_list)){
-                igraph::vertex_attr(iIG, name="highlightcolor") <- "darkgray"
+                igraph::vertex_attr(iIG, name="highlightcolor") <- "#A9A9A9"
         }
 
         if(!("color" %in% edge_attr_list)){
-                igraph::edge_attr(iIG, name="color") <- "lightgray"
+                igraph::edge_attr(iIG, name="color") <- "#D3D3D3"
         }
         if(!("highlightcolor" %in% edge_attr_list)){
-                igraph::edge_attr(iIG, name="highlightcolor") <- "darkgray"
+                igraph::edge_attr(iIG, name="highlightcolor") <- "#A9A9A9"
         }
 
         print(igraph::list.vertex.attributes(iG))
@@ -590,11 +590,11 @@ annotate_iGraph <- function(iG){
 #' }
 #' @keywords internal
 #' @export
-set_vertex_color <- function(iGraph, gx_data_table, dgx_table, pos_cor_color="salmon", pos_cor_highlight_color="red", neg_cor_color="lightblue", neg_cor_highlight_color="royalblue", pos_perc=0.95, neg_perc=0.05){
+set_vertex_color <- function(iGraph, gx_data_table, dgx_table, pos_cor_color="#FA8072", pos_cor_highlight_color="#FF0000", neg_cor_color="#ADD8E6", neg_cor_highlight_color="#4169E1", pos_perc=0.95, neg_perc=0.05){
 	#Intitialize color vectors
         col_length <- vcount(iGraph)
-        color_vector <- rep("lightgrey", col_length)
-        highlight_color_vector <- rep("darkgrey", col_length)
+        color_vector <- rep("#D3D3D3", col_length)
+        highlight_color_vector <- rep("#A9A9A9", col_length)
 	vNames <- igraph::V(iGraph)$name
 	if("score" %in% list.vertex.attributes(iGraph))
 	{
@@ -667,7 +667,7 @@ set_vertex_color <- function(iGraph, gx_data_table, dgx_table, pos_cor_color="sa
 #' }
 #' @keywords internal
 #' @export
-set_edge_color <- function(iGraph, gx_data_table, pos_cor_color="salmon", pos_cor_highlight_color="red", neg_cor_color="lightblue", neg_cor_highlight_color="royalblue"){
+set_edge_color <- function(iGraph, gx_data_table, pos_cor_color="#FA8072", pos_cor_highlight_color="#FF0000", neg_cor_color="#ADD8E6", neg_cor_highlight_color="#4169E1"){
 	tGX <- t(gx_data_table)
 	corGX <- cor(tGX)
 
@@ -1177,11 +1177,11 @@ get_between_GO_sim <- function(mod_ll1, mod_ll2, prefix1=NULL, prefix2=NULL, IC_
 #' @return Gradient of colors as a vector.
 #' @examples
 #' \dontrun{
-#' get_col_gradient(low="red", high="yellow", ncolors=123)
+#' get_col_gradient(low="#FF0000", high="#FFFF00", ncolors=123)
 #' }
 #' @keywords internal
 #' @export
-get_col_gradient <- function(low="red", high="yellow", ncolors=123) {
+get_col_gradient <- function(low="#FF0000", high="#FFFF00", ncolors=123) {
 	rbPal <- grDevices::colorRampPalette(c(low,high))
 	colGradient <- rbPal(ncolors)
 	return(colGradient)
@@ -1570,7 +1570,7 @@ plot_treemap <- function(input.DF, ont="BP"){
 #' @keywords internal
 #' @export
 #get_visNetwork <- function(iG, plot_layout, vBorderColor="black", vShape="circle", vFontColor="#343434", vSize=50, eWidth=10, vColTop="red", vColBottom="blue", vColType="score"){
-get_visNetwork <- function(iG, plot_layout="nicely", vBorderColor="black", vShape="circle", vFontColor="#343434", vSize=50, eWidth=10, degDepth=2){
+get_visNetwork <- function(iG, plot_layout="nicely", vBorderColor="#000000", vShape="circle", vFontColor="#343434", vSize=50, eWidth=10, degDepth=2){
     visLayout <- paste0("layout_", plot_layout)
     vNet <- visNetwork::visIgraph(iG) %>%
         visNetwork::visIgraphLayout(layout = visLayout) %>%

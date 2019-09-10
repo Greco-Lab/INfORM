@@ -377,13 +377,13 @@ dashboardPage(
 									div(id="colByScore",
 										h4("Color Nodes by Score"),
 										fluidRow(
-											column(4,colourpicker::colourInput("vColP", "Node Color +ve", value="salmon")),
-											column(4,colourpicker::colourInput("vColN", "Node Color -ve", value="lightblue")),
-											column(4,colourpicker::colourInput("vColD", "Node Color Default", value="lightgrey"))
+											column(4,colourpicker::colourInput("vColP", "Node Color +ve", value="#FA8072")),
+											column(4,colourpicker::colourInput("vColN", "Node Color -ve", value="#ADD8E6")),
+											column(4,colourpicker::colourInput("vColD", "Node Color Default", value="#D3D3D3"))
 										),fluidRow(
-											column(4,colourpicker::colourInput("vhColP", "Node Highlight Color +ve", value="red")),
-											column(4,colourpicker::colourInput("vhColN", "Node Highlight Color -ve", value="royalblue")),
-											column(4,colourpicker::colourInput("vhColD", "Node Highlight Color Default", value="grey"))
+											column(4,colourpicker::colourInput("vhColP", "Node Highlight Color +ve", value="#FF0000")),
+											column(4,colourpicker::colourInput("vhColN", "Node Highlight Color -ve", value="#4169E1")),
+											column(4,colourpicker::colourInput("vhColD", "Node Highlight Color Default", value="#A9A9A9"))
 										),
 										h4("Score For Node Association"),
 										fluidRow(
@@ -395,8 +395,8 @@ dashboardPage(
 									       div(id="colByRank",
 											h4("Color Gradient for Nodes by Rank"),
 											fluidRow(
-												column(4,colourpicker::colourInput("vColT", "Node Color Top Ranked", value="red")),
-												column(4,colourpicker::colourInput("vColB", "Node Color Bottom Ranked", value="yellow"))
+												column(4,colourpicker::colourInput("vColT", "Node Color Top Ranked", value="#FF0000")),
+												column(4,colourpicker::colourInput("vColB", "Node Color Bottom Ranked", value="#FFFF00"))
 											)
 									       )
 									)
@@ -432,24 +432,24 @@ dashboardPage(
 								h4("Edge Association Colors"),
 								wellPanel(
 									fluidRow(
-										column(6,colourpicker::colourInput("eColP", "Edge Color +ve", value="salmon")),
-										column(6,colourpicker::colourInput("eColN", "Edge Color -ve", value="lightblue"))
+										column(6,colourpicker::colourInput("eColP", "Edge Color +ve", value="#FA8072")),
+										column(6,colourpicker::colourInput("eColN", "Edge Color -ve", value="#ADD8E6"))
 									),fluidRow(
-										column(6,colourpicker::colourInput("ehColP", "Edge Highlight Color +ve", value="red")),
-										column(6,colourpicker::colourInput("ehColN", "Edge Highlight Color -ve", value="royalblue"))#,
+										column(6,colourpicker::colourInput("ehColP", "Edge Highlight Color +ve", value="#FF0000")),
+										column(6,colourpicker::colourInput("ehColN", "Edge Highlight Color -ve", value="#4169E1"))#,
 									)
 								),
 								wellPanel(
 									h4("Plot Aesthetics"),
 									fluidRow(
 										column(6,selectInput("vShape", "Node Shape", choices=c("circle","ellipse","database","box","text"), multiple=FALSE, selected="circle")),
-										column(6,colourpicker::colourInput("vBrdCol", "Node Border Color", value="black"))
+										column(6,colourpicker::colourInput("vBrdCol", "Node Border Color", value="#000000"))
 									),fluidRow(
 										column(6,numericInput("vSize", "Node Label Size", value="20")),
 										column(6,colourpicker::colourInput("vLblCol", "Node Label Color", value="#343434"))
 									),fluidRow(
 										column(6,numericInput("eWidth", "Edge Width", value="5", width="100%")),
-										column(6,colourpicker::colourInput("bgCol", "Background Color", value="white"))
+										column(6,colourpicker::colourInput("bgCol", "Background Color", value="#FFFFFF"))
 									),fluidRow(
 										column(6,numericInput("dDepth", "Depth of Highlighting Nearest Nodes", value="1", width="100%"))
 									)
