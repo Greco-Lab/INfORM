@@ -394,11 +394,12 @@ get_ranked_consensus_matrix <- function(gx_table=NULL, iMethods=NULL, iEst=NULL,
 #' Get edge rank list and binary inference matrix from edge rank matrix computed by get_ranked_consensus_matrix().
 #'
 #' parse_edge_rank_matrix parses the edge rank matrix created by using the internal function get_ranked_consensus_matrix_matrix() to get a ranked edge list and a binary matrix.
+#' Setting the parameter edge_selection_strategy it is possible to choose between adding edges untill all nodes are connected or adding a given percentage of edges.
 #'
 #' @importFrom TopKLists Borda
 #'
 #' @param edge_rank_matrix A symmetrix matrix with edge ranks as weight.
-#' @param edge_selection_strategy Strategy to select edges for ensemble, "default" selects ranked edges untill all nodes have degree>=1, "top" swtiches to top N percentage ranked genes specfied by topN parameter.
+#' @param edge_selection_strategy Strategy to select edges for ensemble, "default" selects ranked edges untill all nodes have degree>=1, "top" swtiches to top N percentage ranked edges specified by topN parameter.
 #' @param mat_weights Type of scores in the ranked matrix; default:rank.
 #' @param topN Top N percentage ranked edges to create ensemble if the edge_selection_strategy is "top"; default:10
 #' @param debug_output Print help and status messages to help debug the running of the function; default:FALSE.
