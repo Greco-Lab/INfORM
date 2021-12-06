@@ -52,7 +52,7 @@ dashboardPage(
 		    }
 		'))),
 		useShinyjs(),
-		extendShinyjs(text = jsCode),
+		extendShinyjs(text = jsCode, functions = "plot_bg_col"),
 		inlineCSS(appCSS),
                 shinyBS::bsModal("importGxModal", "Import Gene Expression Table", "import_gx_submit", size="large",
 			fluidRow(
