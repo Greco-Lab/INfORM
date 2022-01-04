@@ -55,7 +55,7 @@ Cairo - [https://cairographics.org/download/](https://cairographics.org/download
   }
 
   #Install Bioconductor dependencies
-  bioc_pkgs <- c("org.Hs.eg.db", "org.Mm.eg.db", "GO.db", "AnnotationDbi", "GSEABase", "minet")
+  bioc_pkgs <- c("org.Hs.eg.db", "org.Mm.eg.db","org.Rn.eg.db", "GO.db", "AnnotationDbi", "GSEABase", "minet")
   bioc_pkgs.inst <- bioc_pkgs[!(bioc_pkgs %in% rownames(installed.packages()))]
   if(length(bioc_pkgs.inst)>0){
     print(paste0("Missing ", length(bioc_pkgs.inst), " Bioconductor Packages:"))
