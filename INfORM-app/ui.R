@@ -200,8 +200,7 @@ dashboardPage(
                                                                                 multiple=TRUE,
                                                                                 selected=c("clr",
                                                                                         "aracne",
-                                                                                        "mrnet",
-                                                                                        "mrnetb"
+                                                                                        "mrnet"
                                                                                 )
                                                                         ),
                                                                         selectInput("est", "Select Correlation",
